@@ -1,0 +1,321 @@
+# FormField
+
+A modular, type-safe, and scalable form field system built using **React Hook Form**, **TypeScript**, and **Material UI**.
+Each field type is implemented as an independent component, making it fully customizable and optimized for large form-heavy applications.
+
+---
+
+## Features
+
+- ⚡ **Highly optimized** component architecture
+- 🎯 **Strong TypeScript types** — no `any`, full inference
+- 🧩 **Each field is its own component**
+- 🔧 **Extremely customizable** via props
+- 🔁 Designed to scale to 20–30+ field types
+- 🔒 Integrates perfectly with **react-hook-form**’s `Controller`
+- 📦 Supports custom `rules`, `control`, `maxLength`, counters, etc.
+
+---
+
+### 📦 Install Requirements
+
+```bash
+pnpm add react-hook-form @mui/material
+```
+
+---
+
+## 📁 Folder Structure
+
+```bash
+components/
+└── form/
+    ├── index.ts          # Barrel file exporting all form utils/components
+    ├── FormField.tsx     # Generic wrapper using react-hook-form
+    ├── types.ts          # Shared type definitions
+    └── fields/           # Individual field components
+        ├── FormTextField.tsx
+        └── FormNumberField.tsx
+```
+
+---
+
+## 🎯 Concept Overview
+
+The system uses:
+
+- A **central router** (`FormField.tsx`)
+- Individual **field components** (`FormTextField.tsx`, `FormNumberField.tsx`)
+- Strong **TypeScript field types** (`types.ts`)
+- An easy-to-scale **folder structure**
+
+Instead of large switch-cases or repeated boilerplate, each field type becomes a reusable component.
+
+---
+
+## 🧱 FormField Router Component
+
+#### `FormField.tsx`
+
+```tsx filename="/components/form/FormField.tsx"
+import type { FormFieldProps } from "./types";
+import FormTextField from "./fields/FormTextField";
+import FormNumberField from "./fields/FormNumberField";
+
+export default function FormField(props: FormFieldProps) {
+  switch (props.type) {
+    case "text":
+      return <FormTextField {...props} />;
+
+    case "number":
+      return <FormNumberField {...props} />;
+
+    default:
+      return null;
+  }
+}
+```
+
+---
+
+## 🧾 Type Definitions
+
+#### `types.ts`
+
+```ts filename="/components/form/types.ts"
+import type { Control, RegisterOptions } from "react-hook-form";
+import type { GridBaseProps } from "@mui/material/Grid";
+
+export type BaseFieldProps = {
+  name: string;
+  label?: string;
+  fullWidth?: boolean;
+  required?: boolean;
+  placeholder?: string;
+  helpingText?: string;
+  rules?: RegisterOptions;
+  control?: Control<any>;
+  grid?: GridBaseProps;
+};
+
+export type FormFieldProps =
+  | ({ type: "text" } & BaseFieldProps)
+  | ({ type: "number" } & BaseFieldProps);
+```
+
+---
+
+## 📇 Export Barrel File
+
+#### `index.ts`
+
+```ts filename="/components/form/index.ts"
+export { default as FormField } from "./FormField";
+export * from "./types";
+```
+
+---
+
+## 🧩 Field Components
+
+Below are the **two initial field types**.
+
+#### 📝 Text Field Component `FormTextField.tsx`
+
+```tsx filename="/components/form/fields/FormTextField.tsx"
+import { Controller, useFormContext } from "react-hook-form";
+import TextField from "@mui/material/TextField";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import type { TextFieldProps } from "@mui/material/TextField";
+import type { BaseFieldProps } from "../types";
+
+export type FormTextFieldProps = BaseFieldProps & {
+  type: "text";
+  maxLength?: number;
+  fieldProps?: TextFieldProps;
+};
+
+export default function FormTextField(props: FormTextFieldProps) {
+  const { control } = useFormContext();
+  const fullWidth = props.fullWidth ?? true;
+
+  return (
+    <Controller
+      name={props.name}
+      rules={props.rules}
+      control={props.control ?? control}
+      render={({ field, fieldState }) => {
+        const value = field.value ?? "";
+        const showCounter = typeof props.maxLength === "number";
+        return (
+          <TextField
+            {...field}
+            {...props.fieldProps}
+            label={props.label}
+            fullWidth={fullWidth}
+            placeholder={props.placeholder}
+            required={props.required}
+            error={!!fieldState.error}
+            onChange={(e) => field.onChange(e.target.value.trimStart())}
+            slotProps={{ htmlInput: { maxLength: props.maxLength } }}
+            helperText={
+              <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                <Typography variant="caption">
+                  {fieldState.error?.message || props.helpingText}
+                </Typography>
+                {showCounter && (
+                  <Typography variant="caption">
+                    {value.length} / {props.maxLength}
+                  </Typography>
+                )}
+              </Box>
+            }
+          />
+        );
+      }}
+    />
+  );
+}
+```
+
+---
+
+#### 🔢 Number Field Component `FormNumberField.tsx`
+
+```tsx filename="/components/form/fields/FormNumberField.tsx"
+import { Controller, useFormContext } from "react-hook-form";
+import TextField from "@mui/material/TextField";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import type { BaseFieldProps } from "../types";
+import type { TextFieldProps } from "@mui/material/TextField";
+
+export type NumberFieldProps = BaseFieldProps & {
+  type: "number";
+  maxLength?: number;
+  fieldProps?: TextFieldProps;
+};
+
+export default function FormNumberField(props: NumberFieldProps) {
+  const { control } = useFormContext();
+  const fullWidth = props.fullWidth ?? true;
+
+  return (
+    <Controller
+      name={props.name}
+      rules={props.rules}
+      control={props.control ?? control}
+      render={({ field, fieldState }) => {
+        const valueString = String(field.value ?? "");
+        const showCounter = typeof props.maxLength === "number";
+
+        return (
+          <TextField
+            {...field}
+            {...props.fieldProps}
+            fullWidth={fullWidth}
+            type="number"
+            label={props.label}
+            required={props.required}
+            error={!!fieldState.error}
+            placeholder={props.placeholder}
+            onChange={(e) => {
+              const raw = e.target.value;
+              field.onChange(raw === "" ? "" : Number(raw));
+            }}
+            slotProps={{
+              htmlInput: {
+                inputMode: "numeric",
+                maxLength: props.maxLength,
+              },
+            }}
+            helperText={
+              <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                <Typography variant="caption">
+                  {fieldState.error?.message || props.helpingText}
+                </Typography>
+                {showCounter && (
+                  <Typography variant="caption">
+                    {valueString.length} / {props.maxLength}
+                  </Typography>
+                )}
+              </Box>
+            }
+          />
+        );
+      }}
+    />
+  );
+}
+```
+
+---
+
+## 🎯 Usage
+
+To use form fields, wrap your form with **React Hook Form**’s `FormProvider`.
+
+```tsx
+import { useForm, FormProvider } from "react-hook-form";
+import FormField from "@/components/form/FormField";
+
+export default function DemoForm() {
+  const methods = useForm({
+    defaultValues: {
+      username: "",
+      age: 0,
+    },
+  });
+
+  const onSubmit = methods.handleSubmit(console.log);
+
+  return (
+    <FormProvider {...methods}>
+      <form onSubmit={onSubmit}>
+        <FormField type="text" name="username" label="Full Name" required />
+        <FormField type="number" name="age" label="Age" required />
+        <button type="submit">Submit</button>
+      </form>
+    </FormProvider>
+  );
+}
+```
+
+---
+
+## 🧠 Base Props Reference
+
+| Prop          | Type            | Description                  |
+| ------------- | --------------- | ---------------------------- |
+| `name`        | string          | Form field name              |
+| `label`       | string          | MUI label text               |
+| `placeholder` | string          | Input placeholder            |
+| `required`    | boolean         | Adds required indicator      |
+| `helpingText` | string          | Extra helper text            |
+| `rules`       | RegisterOptions | Validation (React Hook Form) |
+| `control`     | Control         | Optional custom form control |
+| `fullWidth`   | boolean         | Defaults to `true`           |
+
+---
+
+
+## 🧩 Extending the System
+
+Add new field:
+
+```
+fields/DateField.tsx
+fields/SelectField.tsx
+fields/RadioField.tsx
+...
+```
+
+Then extend:
+
+```
+FormField.tsx
+types.ts
+```
+
+This system scales infinitely.

@@ -28,7 +28,12 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    "next.config.mjs",
+
+    "app/_meta.js",
+    "public/files/useQueryParams",
+    "public/files/useQueryParams.text"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "public"]
 }

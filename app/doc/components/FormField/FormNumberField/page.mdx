@@ -1,0 +1,291 @@
+---
+title: FormNumberField
+description: Numeric input field built with MUI and React Hook Form, supporting validation, min/max constraints, step controls, and helper text.
+---
+
+# FormNumberField
+
+`FormNumberField` is a reusable, type-safe numeric input component built on top of **React Hook Form** and **MUI**.  
+It is designed for enterprise-scale forms where validation, accessibility, and consistency matter.
+
+This component handles numeric parsing, validation, helper text, error states, and seamless form integration.
+
+---
+
+## 🚀 Features
+
+- Fully integrated with **react-hook-form**
+- Numeric-only input handling
+- Supports `min`, `max`, and `step`
+- Automatic number parsing
+- Custom helper text & error display
+- Works with `FormProvider` or standalone `control`
+- MUI customization via pass-through props
+- Accessible and test-friendly
+
+---
+
+## 📦 Component Source Code
+
+```tsx
+import React from "react";
+import {
+  Controller,
+  useFormContext,
+  type Control,
+  type RegisterOptions,
+} from "react-hook-form";
+import TextField, { type TextFieldProps } from "@mui/material/TextField";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+
+export type FormNumberFieldProps = {
+  name: string;
+  label?: string;
+  placeholder?: string;
+  required?: boolean;
+  helpingText?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  control?: Control<any>;
+  rules?: RegisterOptions;
+  fullWidth?: boolean;
+  fieldProps?: TextFieldProps;
+  id?: string;
+};
+
+export default function FormNumberField(props: FormNumberFieldProps) {
+  const {
+    name,
+    label,
+    placeholder,
+    required = false,
+    helpingText,
+    min,
+    max,
+    step = 1,
+    control: controlOverride,
+    rules,
+    fullWidth = true,
+    fieldProps,
+    id,
+  } = props;
+
+  const formContext = useFormContext();
+  const control = controlOverride ?? (formContext?.control as Control<any>);
+  const helperId = id ? `${id}-helper` : `${name}-helper`;
+
+  return (
+    <Controller
+      name={name}
+      control={control}
+      rules={rules}
+      render={({ field, fieldState }) => {
+        const value = field.value ?? "";
+        const errorMessage = fieldState.error?.message;
+        const isError = !!errorMessage;
+
+        const helper = (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Typography
+              id={helperId}
+              variant="caption"
+              color={isError ? "error" : "text.secondary"}
+            >
+              {errorMessage ?? helpingText ?? ""}
+            </Typography>
+          </Box>
+        );
+
+        return (
+          <TextField
+            {...field}
+            id={id}
+            type="number"
+            label={label ? `${label}${required ? " *" : ""}` : undefined}
+            placeholder={placeholder}
+            required={required}
+            fullWidth={fullWidth}
+            error={isError}
+            aria-describedby={helperId}
+            helperText={helper}
+            value={value}
+            inputProps={{ min, max, step }}
+            onChange={(e) => {
+              const val = e.target.value;
+              field.onChange(val === "" ? "" : Number(val));
+            }}
+            {...fieldProps}
+          />
+        );
+      }}
+    />
+  );
+}
+```
+
+---
+
+## 📚 Props Reference
+
+| Prop          | Type              | Default      | Description                        |
+| ------------- | ----------------- | ------------ | ---------------------------------- |
+| `name`        | `string`          | —            | Field name used by react-hook-form |
+| `label`       | `string`          | —            | MUI field label                    |
+| `placeholder` | `string`          | —            | Placeholder text                   |
+| `required`    | `boolean`         | `false`      | Marks field as required            |
+| `helpingText` | `string`          | —            | Helper text when no error          |
+| `min`         | `number`          | —            | Minimum allowed value              |
+| `max`         | `number`          | —            | Maximum allowed value              |
+| `step`        | `number`          | `1`          | Increment/decrement step           |
+| `control`     | `Control<any>`    | Form context | Override form control              |
+| `rules`       | `RegisterOptions` | —            | Validation rules                   |
+| `fullWidth`   | `boolean`         | `true`       | MUI full width                     |
+| `fieldProps`  | `TextFieldProps`  | —            | Extra MUI props                    |
+| `id`          | `string`          | Generated    | Accessibility & testing            |
+
+---
+
+## 🧪 Basic Usage
+
+```tsx
+import { useForm, FormProvider } from "react-hook-form";
+import FormNumberField from "@/components/form/fields/FormNumberField";
+
+export default function ExampleForm() {
+  const methods = useForm({ defaultValues: { age: 18 } });
+
+  return (
+    <FormProvider {...methods}>
+      <form onSubmit={methods.handleSubmit(console.log)}>
+        <FormNumberField name="age" label="Age" />
+      </form>
+    </FormProvider>
+  );
+}
+```
+
+---
+
+## 🔐 Validation Example
+
+```tsx
+<FormNumberField
+  name="quantity"
+  label="Quantity"
+  required
+  min={1}
+  max={10}
+  rules={{
+    required: "Quantity is required",
+    min: { value: 1, message: "Minimum is 1" },
+    max: { value: 10, message: "Maximum is 10" },
+  }}
+/>
+```
+
+---
+
+## ➕ Step Control Example
+
+```tsx
+<FormNumberField
+  name="price"
+  label="Price"
+  step={0.01}
+  min={0}
+  fieldProps={{ size: "small" }}
+  helpingText="Enter price in USD"
+/>
+```
+
+---
+
+## 🎨 MUI Customization
+
+```tsx
+<FormNumberField
+  name="rating"
+  label="Rating"
+  min={1}
+  max={5}
+  fieldProps={{
+    variant: "outlined",
+    InputProps: {
+      endAdornment: <StarIcon />,
+    },
+  }}
+/>
+```
+
+---
+
+## ♿ Accessibility Notes
+
+- Numeric keyboard support on mobile
+- Proper label association via MUI
+- `aria-describedby` for helper text
+- Custom `id` improves screen reader and test support
+
+---
+
+## 🧵 Storybook Example
+
+```tsx
+import { useForm, FormProvider } from "react-hook-form";
+import FormNumberField from "./FormNumberField";
+
+export default { title: "Form/FormNumberField" };
+
+export const Default = () => {
+  const methods = useForm({ defaultValues: { value: 5 } });
+
+  return (
+    <FormProvider {...methods}>
+      <FormNumberField name="value" label="Value" />
+    </FormProvider>
+  );
+};
+```
+
+---
+
+## 🧩 Full Example
+
+```tsx
+<FormProvider {...methods}>
+  <form onSubmit={methods.handleSubmit(onSubmit)}>
+    <FormNumberField
+      id="product-quantity"
+      name="quantity"
+      label="Quantity"
+      required
+      min={1}
+      max={100}
+      helpingText="Allowed range: 1–100"
+      rules={{ required: "Quantity is required" }}
+      fieldProps={{ size: "small" }}
+    />
+  </form>
+</FormProvider>
+```
+
+---
+
+## 🛠 Troubleshooting
+
+**Value becomes `NaN`?** <br/>
+Ensure empty values are handled properly — this component converts empty strings to `""`.
+
+**Validation not triggering?** <br/>
+Confirm rules are passed via `rules` and the form is wrapped in `FormProvider`.
+
+**Decimals not working?**<br/>
+Set `step={0.01}` or an appropriate decimal value.
