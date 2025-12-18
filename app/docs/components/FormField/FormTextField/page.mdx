@@ -1,0 +1,258 @@
+---
+title: FormTextField
+description: A robust, accessible, and fully typed text input component built with React Hook Form, TypeScript, and MUI.
+---
+
+
+# FormTextField
+
+FormTextField is a robust, accessible, and fully typed text input built with **React Hook Form**, **TypeScript**, and **MUI**.
+It standardizes text input behavior across large apps so teams stop re-implementing the same trimming, counters, error UI, and form wiring. Use it as a drop-in field inside `FormProvider` or with an explicit `control` when you need isolated forms.
+
+---
+
+## Overview
+
+FormTextField focuses on three things: predictable value handling, consistent helper/error UI, and strong typing. It keeps inputs simple for pages to use (name, label, rules) while handling the small annoyances for you (trim leading spaces, character counters, aria associations). The component is intentionally small and easy to extend.
+
+---
+
+## Key features
+
+- Fully typed with TypeScript (no `any` leak).
+- Works with `react-hook-form` (`Controller`) and `FormProvider`.
+- Optional character counter via `maxLength`.
+- Trims leading spaces by default.
+- Clear helper text + error display that is accessible.
+- `fieldProps` passthrough for MUI customization.
+- Optional `control` prop for nested/isolated forms.
+
+---
+
+## Install
+
+```bash
+pnpm add react-hook-form @mui/material @emotion/react @emotion/styled
+```
+
+---
+
+## Component — copy/paste ready
+
+```tsx
+import React from "react";
+import {
+  Controller,
+  useFormContext,
+  type Control,
+  type RegisterOptions,
+} from "react-hook-form";
+import TextField, { type TextFieldProps } from "@mui/material/TextField";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+
+export type FormTextFieldProps = {
+  name: string;
+  label?: string;
+  placeholder?: string;
+  required?: boolean;
+  helpingText?: string;
+  maxLength?: number;
+  control?: Control<any>;
+  rules?: RegisterOptions;
+  fullWidth?: boolean;
+  fieldProps?: TextFieldProps;
+  id?: string;
+};
+
+export default function FormTextField(props: FormTextFieldProps) {
+  const {
+    name,
+    label,
+    placeholder,
+    required = false,
+    helpingText,
+    maxLength,
+    control: controlOverride,
+    rules,
+    fullWidth = true,
+    fieldProps,
+    id,
+  } = props;
+
+  const formContext = useFormContext();
+  const control =
+    controlOverride ?? (formContext?.control as Control<any> | undefined);
+  const helperId = id ? `${id}-helper` : `${name}-helper`;
+
+  return (
+    <Controller
+      name={name}
+      control={control}
+      rules={rules}
+      render={({ field, fieldState }) => {
+        const value = field.value ?? "";
+        const errorMessage = fieldState.error?.message;
+        const showCounter = typeof maxLength === "number";
+        const isError = !!errorMessage;
+
+        const helper = (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Typography
+              id={helperId}
+              variant="caption"
+              color={isError ? "error" : "text.secondary"}
+            >
+              {errorMessage ?? helpingText ?? ""}
+            </Typography>
+
+            {showCounter && (
+              <Typography variant="caption" color="text.secondary">
+                {String(value).length} / {maxLength}
+              </Typography>
+            )}
+          </Box>
+        );
+
+        return (
+          <TextField
+            {...field}
+            id={id}
+            label={label ? `${label}${required ? " *" : ""}` : undefined}
+            placeholder={placeholder}
+            required={required}
+            fullWidth={fullWidth}
+            error={isError}
+            aria-describedby={helperId}
+            helperText={helper}
+            value={value}
+            onChange={(e) => field.onChange(String(e.target.value).trimStart())}
+            inputProps={{ maxLength }}
+            {...fieldProps}
+          />
+        );
+      }}
+    />
+  );
+}
+```
+
+---
+
+## Props reference
+
+| Prop          | Type              | Default            | Notes                 |
+| ------------- | ----------------- | ------------------ | --------------------- |
+| `name`        | `string`          | —                  | RHF field name        |
+| `label`       | `string`          | —                  | Visible label         |
+| `placeholder` | `string`          | —                  | MUI placeholder       |
+| `required`    | `boolean`         | `false`            | Adds `*` to label     |
+| `helpingText` | `string`          | —                  | Shown when no error   |
+| `maxLength`   | `number`          | —                  | Character counter     |
+| `control`     | `Control<any>`    | `useFormContext()` | Override control      |
+| `rules`       | `RegisterOptions` | —                  | Validation rules      |
+| `fullWidth`   | `boolean`         | `true`             | MUI `fullWidth`       |
+| `fieldProps`  | `TextFieldProps`  | —                  | Passthrough MUI props |
+| `id`          | `string`          | generated          | For aria / tests      |
+
+---
+
+## Usage (basic)
+
+Wrap form with `FormProvider` or pass `control` directly.
+
+```tsx
+import { useForm, FormProvider } from "react-hook-form";
+import FormTextField from "@/components/form/fields/FormTextField";
+
+export default function ExampleForm() {
+  const methods = useForm({ defaultValues: { username: "" } });
+
+  return (
+    <FormProvider {...methods}>
+      <form onSubmit={methods.handleSubmit(console.log)}>
+        <FormTextField
+          name="username"
+          label="Username"
+          placeholder="Type here..."
+        />
+      </form>
+    </FormProvider>
+  );
+}
+```
+
+---
+
+## Common patterns
+
+Validation:
+
+```tsx
+<FormTextField
+  name="email"
+  label="Email"
+  required
+  rules={{
+    required: "Email is required",
+    pattern: { value: /^\S+@\S+\.\S+$/, message: "Invalid email" },
+  }}
+  fieldProps={{ size: "small", variant: "outlined" }}
+/>
+```
+
+Character counter:
+
+```tsx
+<FormTextField
+  name="bio"
+  label="Short Bio"
+  maxLength={250}
+  fieldProps={{ multiline: true, rows: 3 }}
+  helpingText="Tell us about yourself."
+/>
+```
+
+Custom MUI options:
+
+```tsx
+<FormTextField
+  name="search"
+  label="Search"
+  fieldProps={{
+    variant: "filled",
+    InputProps: { startAdornment: /* JSX */ null },
+  }}
+/>
+```
+
+---
+
+## Accessibility notes
+
+- `aria-describedby` links the helper/error text to the input.
+- Provide an explicit `id` when fields have similar labels or when writing tests.
+- Using MUI labels preserves label association and keyboard focus.
+- If you remove trimming behavior, ensure you still validate input on blur/submit.
+
+---
+
+## Testing guidance
+
+- Render component inside a `FormProvider` in tests, or pass a test `control`.
+- Assert user flows rather than exact DOM: typing, clearing, validation messages.
+- For emoji or complex character counting, use a grapheme-aware library when asserting counter values.
+
+---
+
+## Troubleshooting
+
+- Value undefined: ensure `FormProvider` wraps the field, or pass `control`.
+- Leading spaces removed: `trimStart()` is applied — remove or change `onChange` if you need leading spaces.
+- Emoji counter mismatch: `String.length` counts UTF-16; use `grapheme-splitter` if accurate visual count is required.

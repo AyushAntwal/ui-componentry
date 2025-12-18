@@ -1,0 +1,153 @@
+---
+title: Introduction 🎉
+description: A component library for fast, structured, and safe development
+---
+
+import { Cards } from "nextra/components";
+import Card from "@/components/Card";
+import { Bleed } from "nextra/components";
+
+# UI Componentry
+
+UI Componentry is a focused, practical collection of reusable UI pieces built so teams ship UI faster with fewer mistakes. It’s not a design catalogue or a visual playground — it’s a toolbox made for real projects: React apps using MUI and react-hook-form, written with TypeScript so you get compile-time safety instead of surprises at runtime.
+
+Think of it as a starter kit plus a living library: each component is small, well-typed, and follows the same folder/layout and API patterns so you — or anyone on your team — can pick it up quickly. Components are intentionally pragmatic: they solve common UI problems you hit in business apps (forms, tables, cards, modals, layout primitives, tiny utilities) and they come with a pre-complete setup (theme wiring, form patterns, basic tests, and TypeScript types) so you don’t spend days redoing boilerplate or hunting for how the old project wired things.
+
+---
+
+# Purpose and core principles
+
+UI Componentry exists to reduce friction. Instead of re-implementing the same form handling, validation wiring, and layout logic across projects, you get a small, consistent API that:
+
+* Uses **React + MUI** for predictable UI primitives.
+* Integrates **react-hook-form** patterns for fast, performant forms.
+* Is **TypeScript-first** so props and form shapes are checked at compile time.
+* Ships with a **pre-complete setup**: theme provider, global styles, form helpers, and basic test scaffolding.
+* Encourages **composition** over magic: small building blocks compose into pages, not huge monolithic components.
+
+The result: fewer bugs, faster on-boarding for new devs, and fewer “where did that old helper live?” searches through ancient repos.
+
+---
+
+# What’s included (high level)
+
+This isn’t an exhaustive checklist — it’s a quick map of the main categories you’ll rely on, explained plainly so you know what to expect:
+
+* **Form primitives** — typed inputs, controlled components wired to `react-hook-form` via small adapters (Controller wrappers) and common validation patterns.
+* **Layout & shell** — page grid, responsive container, header/footer, modal and drawer patterns that match MUI best practices.
+* **Data display** — standardized table rows, list cards, status chips, and small utilities for formatting dates/numbers.
+* **Utilities & hooks** — form helpers (error normalization, default values loader), useToggle, useDebouncedValue, and a few small test helpers.
+* **Tooling & setup** — theme provider, accessibility defaults, storybook / docs skeleton and basic unit test templates.
+
+Each piece is authored to be dropped into most projects with minimal modification.
+
+---
+
+# Getting started — step-by-step (practical)
+
+1. **Install the basics**
+
+   * `npm install @mui/material @emotion/react @emotion/styled react-hook-form`
+     (plus TypeScript, of course, if your project uses it.)
+
+2. **Wire the theme & providers**
+
+   * Wrap your app with the library's `ThemeProvider` and any global providers the collection expects (auth, snackbar, feature flags). That standardizes spacing, colors and MUI overrides.
+
+3. **Use a form primitive**
+
+   * The collection provides small, typed adapters so `react-hook-form` works cleanly with MUI fields. Example (TypeScript):
+
+```tsx
+import React from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { TextField, Button } from '@mui/material';
+
+type FormValues = {
+  name: string;
+  email: string;
+};
+
+export default function ExampleForm() {
+  const { control, handleSubmit } = useForm<FormValues>({ defaultValues: { name: '', email: '' } });
+
+  const onSubmit = (data: FormValues) => {
+    console.log('submitted', data);
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} noValidate>
+      <Controller
+        name="name"
+        control={control}
+        rules={{ required: 'Name is required' }}
+        render={({ field, fieldState }) => (
+          <TextField
+            {...field}
+            label="Name"
+            fullWidth
+            margin="normal"
+            error={!!fieldState.error}
+            helperText={fieldState.error?.message}
+          />
+        )}
+      />
+
+      <Controller
+        name="email"
+        control={control}
+        rules={{ required: 'Email is required' }}
+        render={({ field, fieldState }) => (
+          <TextField
+            {...field}
+            label="Email"
+            type="email"
+            fullWidth
+            margin="normal"
+            error={!!fieldState.error}
+            helperText={fieldState.error?.message}
+          />
+        )}
+      />
+
+      <Button type="submit" variant="contained" sx={{ mt: 2 }}>
+        Submit
+      </Button>
+    </form>
+  );
+}
+```
+
+4. **Follow the patterns**
+
+   * Use the collection’s named folders (e.g., `components/`, `hooks/`, `forms/`) and copy the example files when creating new components. That keeps documentation, tests, and types consistent.
+
+5. **Enable Type safety**
+
+   * Export and reuse small TypeScript types for form shapes and component props. The library leans on generics so your forms and lists stay typed end-to-end.
+
+6. **Add docs & stories**
+
+   * Each component ships with a minimal story or MDX doc showing usage. Keep those updated — they’re the fastest way for teammates to learn the API.
+
+---
+
+# Best practices & patterns (short guide)
+
+* **Composition first**: prefer combining small primitives (Input, FieldRow, FormLayout) rather than creating bespoke mega-components. Smaller parts = easier tests and reuse.
+* **Single source of truth for theme**: put spacing, typography and color tokens in the provider. Let components use tokens, not hardcoded values.
+* **Form validation in one place**: centralize common validators and error message helpers. Let pages supply shape and rules, components remain dumb and focused on rendering.
+* **Accessibility by default**: keyboard focus, proper aria labels, and semantic HTML are built into primitives. Don’t bypass them unless there’s a real reason.
+* **Testing**: test the behavior (user flows) more than exact markup. The collection includes simple test helpers to render components with required providers.
+
+---
+
+# Extending and contributing (step-by-step)
+
+1. **Follow the component template** — copy the example component folder that includes `index.tsx`, `props.type.ts`, a story, and a test file.
+2. **Create a small, focused API** — 3–6 props max for most components. If a component needs lots of options, break it into smaller pieces.
+3. **Write the types first** — define the props and any generic types before implementation.
+4. **Add a story / doc** — show 2–3 common use cases (default, with validation, disabled).
+5. **Add tests** — basic render + one behavior test (e.g., validation shows an error).
+6. **Run lint & build** — keep the same tooling rules so CI stays green.
+

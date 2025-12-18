@@ -1,3 +1,3 @@
 export default {
-  doc: "React Collection 📌",
+  docs: "UI Componentry",
 };

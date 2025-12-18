@@ -1,63 +1,52 @@
 # FormField
 
-A modular, type-safe, and scalable form field system built using **React Hook Form**, **TypeScript**, and **Material UI**.
-Each field type is implemented as an independent component, making it fully customizable and optimized for large form-heavy applications.
+FormField is a modular, type-safe form-field system built with **React Hook Form**, **TypeScript**, and **Material-UI**. It turns each input type into a small, focused component so large, form-heavy apps stay maintainable and predictable. You get strict types (no `any`), tiny well-documented components, and a single predictable integration pattern so teams can add 20–30+ field types without the UI becoming a tangle.
 
 ---
 
-## Features
+# Why use this system
 
-- ⚡ **Highly optimized** component architecture
-- 🎯 **Strong TypeScript types** — no `any`, full inference
-- 🧩 **Each field is its own component**
-- 🔧 **Extremely customizable** via props
-- 🔁 Designed to scale to 20–30+ field types
-- 🔒 Integrates perfectly with **react-hook-form**’s `Controller`
-- 📦 Supports custom `rules`, `control`, `maxLength`, counters, etc.
+This system solves the repeated work that comes with forms:
+
+- each field is its own component so behavior, validation, and rendering are isolated;
+- everything is typed end-to-end (default shapes → form values → components);
+- components are already wired to `react-hook-form`’s `Controller` so you avoid repeated boilerplate;
+- defaults and patterns keep UI consistent across pages.
+
+In short: fewer bugs, faster onboarding, and easier tests.
 
 ---
 
-### 📦 Install Requirements
+# Core idea (how it works)
 
-```bash
-pnpm add react-hook-form @mui/material
+1. A tiny **router component** (`FormField.tsx`) picks the right field component by `type` and forwards props.
+2. Each field component (text, number, select, date, etc.) is responsible only for rendering + minimal conversion logic (string ↔ number, iso date ↔ Date, counters, helper text).
+3. Types live in a single `types.ts` so adding a new field requires: add component, extend types, register in router — predictable and small steps.
+4. Use `FormProvider` to share the form `control` and other common helpers; components will use `useFormContext` by default but accept a `control` prop for explicit wiring.
+
+---
+
+# Folder structure (recommended)
+
 ```
-
----
-
-## 📁 Folder Structure
-
-```bash
 components/
 └── form/
-    ├── index.ts          # Barrel file exporting all form utils/components
-    ├── FormField.tsx     # Generic wrapper using react-hook-form
-    ├── types.ts          # Shared type definitions
-    └── fields/           # Individual field components
+    ├── index.ts            # barrel exports
+    ├── FormField.tsx       # router component
+    ├── types.ts            # shared types
+    └── fields/
         ├── FormTextField.tsx
-        └── FormNumberField.tsx
+        ├── FormNumberField.tsx
+        └── ...other fields
 ```
 
 ---
 
-## 🎯 Concept Overview
+# Key files (concise, copy-ready)
 
-The system uses:
+### Router — `FormField.tsx`
 
-- A **central router** (`FormField.tsx`)
-- Individual **field components** (`FormTextField.tsx`, `FormNumberField.tsx`)
-- Strong **TypeScript field types** (`types.ts`)
-- An easy-to-scale **folder structure**
-
-Instead of large switch-cases or repeated boilerplate, each field type becomes a reusable component.
-
----
-
-## 🧱 FormField Router Component
-
-#### `FormField.tsx`
-
-```tsx filename="/components/form/FormField.tsx"
+```tsx
 import type { FormFieldProps } from "./types";
 import FormTextField from "./fields/FormTextField";
 import FormNumberField from "./fields/FormNumberField";
@@ -66,23 +55,17 @@ export default function FormField(props: FormFieldProps) {
   switch (props.type) {
     case "text":
       return <FormTextField {...props} />;
-
     case "number":
       return <FormNumberField {...props} />;
-
     default:
       return null;
   }
 }
 ```
 
----
+### Types — `types.ts`
 
-## 🧾 Type Definitions
-
-#### `types.ts`
-
-```ts filename="/components/form/types.ts"
+```ts
 import type { Control, RegisterOptions } from "react-hook-form";
 import type { GridBaseProps } from "@mui/material/Grid";
 
@@ -99,42 +82,24 @@ export type BaseFieldProps = {
 };
 
 export type FormFieldProps =
-  | ({ type: "text" } & BaseFieldProps)
-  | ({ type: "number" } & BaseFieldProps);
+  | ({ type: "text" } & BaseFieldProps & {
+        maxLength?: number;
+        fieldProps?: any;
+      })
+  | ({ type: "number" } & BaseFieldProps & {
+        maxLength?: number;
+        fieldProps?: any;
+      });
 ```
 
----
+### Text field — `FormTextField.tsx`
 
-## 📇 Export Barrel File
-
-#### `index.ts`
-
-```ts filename="/components/form/index.ts"
-export { default as FormField } from "./FormField";
-export * from "./types";
-```
-
----
-
-## 🧩 Field Components
-
-Below are the **two initial field types**.
-
-#### 📝 Text Field Component `FormTextField.tsx`
-
-```tsx filename="/components/form/fields/FormTextField.tsx"
+```tsx
 import { Controller, useFormContext } from "react-hook-form";
 import TextField from "@mui/material/TextField";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import type { TextFieldProps } from "@mui/material/TextField";
-import type { BaseFieldProps } from "../types";
-
-export type FormTextFieldProps = BaseFieldProps & {
-  type: "text";
-  maxLength?: number;
-  fieldProps?: TextFieldProps;
-};
+import type { FormTextFieldProps } from "../types"; // adjust import as needed
 
 export default function FormTextField(props: FormTextFieldProps) {
   const { control } = useFormContext();
@@ -158,7 +123,7 @@ export default function FormTextField(props: FormTextFieldProps) {
             required={props.required}
             error={!!fieldState.error}
             onChange={(e) => field.onChange(e.target.value.trimStart())}
-            slotProps={{ htmlInput: { maxLength: props.maxLength } }}
+            inputProps={{ maxLength: props.maxLength }}
             helperText={
               <Box sx={{ display: "flex", justifyContent: "space-between" }}>
                 <Typography variant="caption">
@@ -166,7 +131,7 @@ export default function FormTextField(props: FormTextFieldProps) {
                 </Typography>
                 {showCounter && (
                   <Typography variant="caption">
-                    {value.length} / {props.maxLength}
+                    {String(value).length} / {props.maxLength}
                   </Typography>
                 )}
               </Box>
@@ -179,23 +144,14 @@ export default function FormTextField(props: FormTextFieldProps) {
 }
 ```
 
----
+### Number field — `FormNumberField.tsx`
 
-#### 🔢 Number Field Component `FormNumberField.tsx`
-
-```tsx filename="/components/form/fields/FormNumberField.tsx"
+```tsx
 import { Controller, useFormContext } from "react-hook-form";
 import TextField from "@mui/material/TextField";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
-import type { BaseFieldProps } from "../types";
-import type { TextFieldProps } from "@mui/material/TextField";
-
-export type NumberFieldProps = BaseFieldProps & {
-  type: "number";
-  maxLength?: number;
-  fieldProps?: TextFieldProps;
-};
+import type { NumberFieldProps } from "../types";
 
 export default function FormNumberField(props: NumberFieldProps) {
   const { control } = useFormContext();
@@ -224,12 +180,7 @@ export default function FormNumberField(props: NumberFieldProps) {
               const raw = e.target.value;
               field.onChange(raw === "" ? "" : Number(raw));
             }}
-            slotProps={{
-              htmlInput: {
-                inputMode: "numeric",
-                maxLength: props.maxLength,
-              },
-            }}
+            inputProps={{ inputMode: "numeric", maxLength: props.maxLength }}
             helperText={
               <Box sx={{ display: "flex", justifyContent: "space-between" }}>
                 <Typography variant="caption">
@@ -252,22 +203,26 @@ export default function FormNumberField(props: NumberFieldProps) {
 
 ---
 
-## 🎯 Usage
+# How to use (step-by-step)
 
-To use form fields, wrap your form with **React Hook Form**’s `FormProvider`.
+1. Install dependencies:
+
+   ```bash
+   pnpm add react-hook-form @mui/material @emotion/react @emotion/styled
+   ```
+
+2. Wrap your form with `FormProvider` (from `react-hook-form`) so field components can use `useFormContext`.
+3. Use `FormField` in the form and pass `type`, `name`, and other base props.
+4. If you need a field to be controlled by another provider or have an isolated `control`, pass a `control` prop to the field.
+
+Example:
 
 ```tsx
 import { useForm, FormProvider } from "react-hook-form";
 import FormField from "@/components/form/FormField";
 
 export default function DemoForm() {
-  const methods = useForm({
-    defaultValues: {
-      username: "",
-      age: 0,
-    },
-  });
-
+  const methods = useForm({ defaultValues: { username: "", age: 0 } });
   const onSubmit = methods.handleSubmit(console.log);
 
   return (
@@ -284,38 +239,23 @@ export default function DemoForm() {
 
 ---
 
-## 🧠 Base Props Reference
+# Best practices & patterns
 
-| Prop          | Type            | Description                  |
-| ------------- | --------------- | ---------------------------- |
-| `name`        | string          | Form field name              |
-| `label`       | string          | MUI label text               |
-| `placeholder` | string          | Input placeholder            |
-| `required`    | boolean         | Adds required indicator      |
-| `helpingText` | string          | Extra helper text            |
-| `rules`       | RegisterOptions | Validation (React Hook Form) |
-| `control`     | Control         | Optional custom form control |
-| `fullWidth`   | boolean         | Defaults to `true`           |
+- Keep each field component focused: rendering + lightweight type conversion + display helpers (counters, helper text).
+- Prefer `useFormContext` inside fields and expose an optional `control` prop for advanced cases.
+- Put validation rules in page-level code (or a small validators module) and pass them as `rules` to keep components dumb.
+- Keep UI logic (error layout, helper text) consistent across fields — copy the helper block pattern.
+- Test behavior, not markup: assert validation and user flows.
 
 ---
 
+# Extending the system
 
-## 🧩 Extending the System
+To add a new field:
 
-Add new field:
+1. Create `fields/SelectField.tsx` (or `DateField.tsx`, etc.) — small component using `Controller`.
+2. Add its type to `types.ts`.
+3. Register it in `FormField.tsx`.
+4. Add a Storybook story and one behavior test.
 
-```
-fields/DateField.tsx
-fields/SelectField.tsx
-fields/RadioField.tsx
-...
-```
-
-Then extend:
-
-```
-FormField.tsx
-types.ts
-```
-
-This system scales infinitely.
+That pattern guarantees every new field fits the same runtime and test shape.

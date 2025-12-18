@@ -1,0 +1,243 @@
+---
+title: FormNumberField
+description: A type-safe numeric input component built with React Hook Form, TypeScript, and MUI.
+---
+
+# FormNumberField
+
+**FormNumberField** is a reusable, type-safe numeric input built with **React Hook Form**, **TypeScript**, and **MUI**.
+It focuses on predictable numeric parsing, validation, accessibility, and easy integration into large forms. The component works with `FormProvider` by default but accepts an explicit `control` prop for isolated use.
+
+---
+
+## What it solves
+
+Large apps repeatedly need numeric inputs with consistent behavior: empty-value handling, step/min/max enforcement, clear helper text and error display, and stable wiring to `react-hook-form`. `FormNumberField` centralizes that behavior so pages only provide intent (label, rules, min, max, step) and not the conversion plumbing.
+
+---
+
+## Quick install
+
+```bash
+pnpm add react-hook-form @mui/material @emotion/react @emotion/styled
+```
+
+---
+
+## Component (copyable)
+
+```tsx
+import React from "react";
+import {
+  Controller,
+  useFormContext,
+  type Control,
+  type RegisterOptions,
+} from "react-hook-form";
+import TextField, { type TextFieldProps } from "@mui/material/TextField";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+
+export type FormNumberFieldProps = {
+  name: string;
+  label?: string;
+  placeholder?: string;
+  required?: boolean;
+  helpingText?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  control?: Control<any>;
+  rules?: RegisterOptions;
+  fullWidth?: boolean;
+  fieldProps?: TextFieldProps;
+  id?: string;
+};
+
+export default function FormNumberField(props: FormNumberFieldProps) {
+  const {
+    name,
+    label,
+    placeholder,
+    required = false,
+    helpingText,
+    min,
+    max,
+    step = 1,
+    control: controlOverride,
+    rules,
+    fullWidth = true,
+    fieldProps,
+    id,
+  } = props;
+
+  const formContext = useFormContext();
+  const control =
+    controlOverride ?? (formContext?.control as Control<any> | undefined);
+  const helperId = id ? `${id}-helper` : `${name}-helper`;
+
+  return (
+    <Controller
+      name={name}
+      control={control}
+      rules={rules}
+      render={({ field, fieldState }) => {
+        const rawValue = field.value;
+        // keep empty string for blank inputs; otherwise store as number
+        const value =
+          rawValue === undefined || rawValue === null ? "" : rawValue;
+        const errorMessage = fieldState.error?.message;
+        const isError = !!errorMessage;
+
+        const helper = (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Typography
+              id={helperId}
+              variant="caption"
+              color={isError ? "error" : "text.secondary"}
+            >
+              {errorMessage ?? helpingText ?? ""}
+            </Typography>
+          </Box>
+        );
+
+        return (
+          <TextField
+            {...field}
+            id={id}
+            type="number"
+            label={label ? `${label}${required ? " *" : ""}` : undefined}
+            placeholder={placeholder}
+            required={required}
+            fullWidth={fullWidth}
+            error={isError}
+            aria-describedby={helperId}
+            helperText={helper}
+            value={value}
+            inputProps={{ min, max, step }}
+            onChange={(e) => {
+              const v = e.target.value;
+              // keep empty string to allow clearing; otherwise convert to Number
+              field.onChange(v === "" ? "" : Number(v));
+            }}
+            {...fieldProps}
+          />
+        );
+      }}
+    />
+  );
+}
+```
+
+---
+
+## Props
+
+| Prop          | Type              | Default      | Notes                             |
+| ------------- | ----------------- | ------------ | --------------------------------- |
+| `name`        | `string`          | —            | react-hook-form field name        |
+| `label`       | `string`          | —            | displayed label                   |
+| `placeholder` | `string`          | —            | input placeholder                 |
+| `required`    | `boolean`         | `false`      | shows required indicator in label |
+| `helpingText` | `string`          | —            | shown when no error               |
+| `min`         | `number`          | —            | HTML `min` attribute              |
+| `max`         | `number`          | —            | HTML `max` attribute              |
+| `step`        | `number`          | `1`          | HTML `step` attribute             |
+| `control`     | `Control<any>`    | form context | override react-hook-form control  |
+| `rules`       | `RegisterOptions` | —            | validation rules for RHF          |
+| `fullWidth`   | `boolean`         | `true`       | MUI fullWidth                     |
+| `fieldProps`  | `TextFieldProps`  | —            | passthrough MUI props             |
+| `id`          | `string`          | generated    | used for accessibility/testing    |
+
+---
+
+## Usage example
+
+Wrap the form with `FormProvider` and use the field as a drop-in:
+
+```tsx
+import { useForm, FormProvider } from "react-hook-form";
+import FormNumberField from "@/components/form/fields/FormNumberField";
+
+export default function ExampleForm() {
+  const methods = useForm({ defaultValues: { age: 18 } });
+  return (
+    <FormProvider {...methods}>
+      <form onSubmit={methods.handleSubmit(console.log)}>
+        <FormNumberField name="age" label="Age" />
+      </form>
+    </FormProvider>
+  );
+}
+```
+
+---
+
+## Common patterns
+
+**Validation with min/max**
+
+Pass RHF rules to show custom messages:
+
+```tsx
+<FormNumberField
+  name="quantity"
+  label="Quantity"
+  required
+  min={1}
+  max={10}
+  rules={{
+    required: "Quantity is required",
+    min: { value: 1, message: "Minimum is 1" },
+    max: { value: 10, message: "Maximum is 10" },
+  }}
+/>
+```
+
+**Decimal steps**
+
+For currency/decimal inputs use `step`:
+
+```tsx
+<FormNumberField name="price" label="Price" min={0} step={0.01} />
+```
+
+**MUI customizations**
+
+Pass `fieldProps` to change appearance or add adornments:
+
+```tsx
+<FormNumberField
+  name="rating"
+  label="Rating"
+  min={1}
+  max={5}
+  fieldProps={{
+    variant: "outlined",
+    InputProps: { endAdornment: <span>/5</span> },
+  }}
+/>
+```
+
+---
+
+## Accessibility notes
+
+- Uses `type="number"` so mobile shows numeric keyboard where supported.
+- Links helper text via `aria-describedby` for screen readers.
+- Provide an explicit `id` when testing or when multiple fields have similar labels.
+
+---
+
+## Troubleshooting
+
+- **Input becomes `NaN`**: the component keeps empty inputs as `""`. Ensure your form default values align with expected types (e.g., `0` or `""`).
+- **Decimals ignored**: set `step` to a decimal (e.g., `0.01`) and ensure the underlying data consumer accepts floats.
+- **Validation not firing**: confirm the form is wrapped with `FormProvider` or pass a `control` prop to the field.
+

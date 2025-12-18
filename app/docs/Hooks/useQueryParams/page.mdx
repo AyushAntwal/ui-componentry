@@ -1,0 +1,280 @@
+# useQueryParams
+
+A lightweight, type-safe React hook for managing URL query parameters with support for nested objects, arrays, dates, numbers, booleans and strings. Built on top of `react-router-dom`'s `useSearchParams`, it removes boilerplate parsing and keeps URLs clean by omitting values that match your defaults.
+
+## Why useQueryParams?
+
+This hook removes manual `URLSearchParams` fiddling and centralizes query logic. You get typed values (via your defaults), per-key setters for efficient updates, and support for nested objects out of the box. It’s designed for React Router v6+ apps that want predictable, human-friendly query strings.
+
+---
+
+## Installation & wiring
+
+First, install React Router:
+
+```bash
+npm install react-router-dom
+# or
+yarn add react-router-dom
+```
+
+Then add the hook file to your project:
+
+`src/hooks/useQueryParams.ts`
+
+Paste the implementation below.
+
+---
+
+## Implementation (fixed & improved)
+
+```tsx filename="useQueryParams.ts" copy
+import { useSearchParams, type NavigateOptions } from "react-router-dom";
+import { useMemo, useRef, useCallback } from "react";
+
+// --------------------
+// Helpers: flatten / unflatten
+// --------------------
+function flatten(
+  obj: Record<string, any>,
+  prefix = "",
+  res: Record<string, any> = {}
+) {
+  for (const key in obj) {
+    const val = obj[key];
+    const path = prefix ? `${prefix}.${key}` : key;
+
+    if (
+      val &&
+      typeof val === "object" &&
+      !Array.isArray(val) &&
+      !(val instanceof Date)
+    ) {
+      flatten(val, path, res);
+    } else {
+      res[path] = val;
+    }
+  }
+  return res;
+}
+
+function unflatten(flat: Record<string, any>) {
+  const result: Record<string, any> = {};
+  for (const path in flat) {
+    const keys = path.split(".");
+    let cur = result;
+    keys.slice(0, -1).forEach((k) => {
+      if (!cur[k]) cur[k] = {};
+      cur = cur[k];
+    });
+    cur[keys[keys.length - 1]] = flat[path];
+  }
+  return result;
+}
+
+// --------------------
+// Helpers: parse / serialize
+// NOTE: we rely on URLSearchParams to handle encoding/decoding.
+// --------------------
+function parseValue(raw: string | null, def: any) {
+  if (raw == null) return def;
+
+  if (Array.isArray(def)) {
+    if (raw === "") return def;
+    // arrays stored as comma-separated strings
+    const parts = raw.split(",");
+    const elemDef = def[0] ?? "";
+    return parts.map((v) => parseValue(v, elemDef));
+  }
+
+  if (def instanceof Date) {
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? def : d;
+  }
+
+  if (typeof def === "number") {
+    const n = Number(raw);
+    return isNaN(n) ? def : n;
+  }
+
+  if (typeof def === "boolean") return raw === "true";
+
+  return raw;
+}
+
+function serializeValue(value: any) {
+  if (Array.isArray(value)) return value.map(String).join(",");
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+}
+
+function isEqual(a: any, b: any) {
+  if (Array.isArray(a) && Array.isArray(b))
+    return a.length === b.length && a.every((v, i) => isEqual(v, b[i]));
+  if (a instanceof Date && b instanceof Date)
+    return a.getTime() === b.getTime();
+  return String(a) === String(b);
+}
+
+// --------------------
+// Hook: useQueryParams
+// --------------------
+export function useQueryParams<T extends Record<string, any>>(defaults: T) {
+  const [params, setParams] = useSearchParams();
+  const defaultsRef = useRef(flatten(defaults));
+
+  // Build current flat values from URL (fall back to defaults)
+  const flatValues = useMemo(() => {
+    const out: Record<string, any> = {};
+    for (const key in defaultsRef.current) {
+      const raw = params.get(key);
+      out[key] = parseValue(raw, defaultsRef.current[key]);
+    }
+    return out;
+  }, [params]);
+
+  const values = useMemo(() => unflatten(flatValues) as T, [flatValues]);
+
+  // Update multiple keys
+  const set = useCallback(
+    (updates: Partial<T>, nav?: NavigateOptions) => {
+      const flat = flatten(updates as Record<string, any>);
+      setParams((prev) => {
+        const next = new URLSearchParams(prev.toString());
+        for (const key in flat) {
+          const val = flat[key];
+          const def = defaultsRef.current[key];
+          if (val == null || isEqual(val, def)) next.delete(key);
+          else next.set(key, serializeValue(val));
+        }
+        return next;
+      }, nav);
+    },
+    [setParams]
+  );
+
+  // Per-key setter (efficient for input fields)
+  const key = useCallback(
+    (path: string) => ({
+      value: flatValues[path] ?? defaultsRef.current[path],
+      set: (v: any, nav?: NavigateOptions) => {
+        setParams((prev) => {
+          const next = new URLSearchParams(prev.toString());
+          const def = defaultsRef.current[path];
+          if (v == null || isEqual(v, def)) next.delete(path);
+          else next.set(path, serializeValue(v));
+          return next;
+        }, nav);
+      },
+    }),
+    [flatValues, setParams]
+  );
+
+  // Reset to defaults (writes defaults back into the URL so you have a known baseline)
+  const reset = useCallback(
+    (nav?: NavigateOptions) => {
+      setParams(() => {
+        const next = new URLSearchParams();
+        for (const key in defaultsRef.current) {
+          const def = defaultsRef.current[key];
+          // omit null/undefined defaults; keep non-empty defaults (including numbers/strings/bools/dates)
+          if (def != null && !(Array.isArray(def) && def.length === 0)) {
+            next.set(key, serializeValue(def));
+          }
+        }
+        return next;
+      }, nav);
+    },
+    [setParams]
+  );
+
+  return { values, set, key, reset } as const;
+}
+```
+
+**Notes about the implementation changes**
+
+- Removed manual `encodeURIComponent`/`decodeURIComponent`. `URLSearchParams` handles encoding for you; double-encoding caused corrupted values. The hook now stores raw strings and relies on `URLSearchParams` to encode when building the final URL.
+- Arrays are serialized as comma-separated strings (`a,b,c`). If your array elements may contain commas, use a different encoding (e.g. repeated params or JSON) — see Best Practices below.
+- Dates are saved as ISO strings (`toISOString`) and parsed back into `Date` objects.
+- Defaults are flattened and used as the type/shape source. The hook removes keys from the URL when their value equals the default, to keep URLs short and stable.
+
+---
+
+## API overview (what you get)
+
+- `values` — the parsed, typed object built from the URL (matches your defaults’ shape).
+- `set(updates, options?)` — update multiple parameters at once. Any value matching its default is removed from the URL.
+- `key(path)` — returns `{ value, set }` for a single flattened path (eg `"filters.page"`). Great for form inputs to avoid re-flattening.
+- `reset(options?)` — writes defaults into the URL (skips `null`/`undefined` and empty-array defaults).
+
+---
+
+## Usage examples
+
+### Basic
+
+```tsx
+const defaultFilters = {
+  search: "",
+  page: 1,
+  tags: [] as string[],
+  date: null as Date | null,
+};
+
+export function Products() {
+  const { values, set, key, reset } = useQueryParams(defaultFilters);
+
+  return (
+    <div>
+      <input
+        value={values.search}
+        onChange={(e) => set({ search: e.target.value })}
+      />
+      <button onClick={reset}>Reset</button>
+      <pre>{JSON.stringify(values, null, 2)}</pre>
+    </div>
+  );
+}
+```
+
+### Per-key setter (inputs)
+
+```tsx
+const searchParam = key("search");
+
+<input
+  value={searchParam.value}
+  onChange={(e) => searchParam.set(e.target.value)}
+/>;
+```
+
+### Multiple updates
+
+```tsx
+set({ page: 2, tags: ["electronics", "gaming"] });
+// URL: ?page=2&tags=electronics,gaming
+```
+
+### Reset to defaults
+
+```tsx
+reset();
+// Writes defaults into URL (skipping nulls and empty arrays)
+```
+
+---
+
+## Best practices & design guidance
+
+Keep defaults small and intentional — defaults define your “clean URL” baseline. For form inputs, prefer `key(path)` so only one field update happens instead of flattening the whole object, which helps performance and reduces re-renders. Avoid storing large binary or JSON blobs in the URL. If your arrays may contain commas or complex strings, either use repeated query keys (not implemented in this simple serializer) or switch to a safe encoding (JSON + base64 or short IDs).
+
+---
+
+## Common pitfalls & notes
+
+- Arrays should be homogeneous. The hook infers types from `defaults`, so an array default like `["a"]` implies string array. Mixing types inside arrays will produce surprising conversions.
+- Empty arrays are treated as defaults and removed from the URL to keep it clean.
+- Invalid date values fall back to the provided default date.
+- If you change the default shape (rename keys or restructure nested objects), the flat key names change and existing URLs may not map 1:1 anymore. Treat defaults as the canonical shape.
+s

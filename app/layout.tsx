@@ -5,14 +5,22 @@ import "nextra-theme-docs/style.css";
 import "./globals.css";
 export const metadata = {
   title: "Doc",
+  description: "Documentation for UI Componentry",
+  icons: {
+    icon: "/favicon.ico",
+  },
   // For more information on metadata API, see: https://nextjs.org/docs/app/building-your-application/optimizing/metadata
 };
 
-const banner = <Banner storageKey="some-key">New Doc released 🎉</Banner>;
+const banner = (
+  <Banner storageKey="ui-componentry-version">
+    UI Componentry v0.1 • Actively maintained
+  </Banner>
+);
 const navbar = (
   <Navbar
     logo={<b>UI Componentry</b>}
-
+    projectLink="https://github.com/AyushAntwal/ui-componentry"
     // ... Your additional navbar options
   />
 );
@@ -27,11 +35,12 @@ export default async function RootLayout({
     <html lang="en" dir="ltr" suppressHydrationWarning>
       <body>
         <Layout
+          sidebar={{ defaultMenuCollapseLevel: 1 }}
           banner={banner}
           copyPageButton={false}
           navbar={navbar}
           pageMap={await getPageMap()}
-          // docsRepositoryBase="https://github.com/shuding/nextra/tree/main/docs"
+          docsRepositoryBase="https://github.com/AyushAntwal/ui-componentry/tree/main"
           footer={footer}
         >
           {children}
