@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "lucide-react": "^0.562.0",
     "next": "16.0.8",
     "nextra": "^4.6.1",
     "nextra-theme-blog": "^4.6.1",

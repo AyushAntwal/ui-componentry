@@ -1,0 +1,404 @@
+---
+title: Data Table
+asIndexPage: true
+icon: TableIcon
+sidebarTitle: Data Table 
+---
+
+# Data Table
+
+A typed, sortable, paginated data table component built with MUI's DataGrid. It integrates seamlessly with TypeScript to ensure type safety for your data rows and columns.
+
+## Features
+
+- Type-safe rows and columns using TypeScript generics
+- Built-in sorting and pagination
+- Customizable column definitions
+- Easy integration with server-side data fetching
+
+## Code
+
+```tsx
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Box,
+  CircularProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TablePagination,
+  TableRow,
+  TableSortLabel,
+  Typography,
+} from "@mui/material";
+
+const DEFAULT_MIN_WIDTH = 100;
+const DEFAULT_MAX_WIDTH = 250;
+
+// -----------------------------
+// Types
+// -----------------------------
+export type DataTableProps<T> = {
+  columns: TableColumn<T>[];
+  rows: T[];
+
+  rowKey?: keyof T | string;
+
+  serverSide?: boolean;
+  totalCount?: number;
+  onServerPageChange?: (page: number, rowsPerPage: number) => void;
+
+  initialPage?: number;
+  initialRowsPerPage?: number;
+  rowsPerPageOptions?: number[];
+
+  loading?: boolean;
+  tableHeight?: string | number | object;
+};
+
+// -----------------------------
+// Helpers
+// -----------------------------
+function stableSort<T>(array: T[], comparator: (a: T, b: T) => number) {
+  return array
+    .map((el, index) => [el, index] as [T, number])
+    .sort((a, b) => comparator(a[0], b[0]) || a[1] - b[1])
+    .map(([el]) => el);
+}
+
+function getComparator<Key extends string>(
+  order: "asc" | "desc",
+  orderBy: Key
+) {
+  return <T extends Record<Key, any>>(a: T, b: T) => {
+    const va = a[orderBy];
+    const vb = b[orderBy];
+
+    if (va == null && vb != null) return order === "asc" ? -1 : 1;
+    if (vb == null && va != null) return order === "asc" ? 1 : -1;
+    if (va < vb) return order === "asc" ? -1 : 1;
+    if (va > vb) return order === "asc" ? 1 : -1;
+    return 0;
+  };
+}
+
+// -----------------------------
+// Component
+// -----------------------------
+const DataTable = <T extends Record<string, any>>({
+  columns,
+  rows,
+  rowKey = "id",
+
+  serverSide = false,
+  totalCount = 0,
+  onServerPageChange,
+
+  initialPage = 0,
+  initialRowsPerPage = 10,
+  rowsPerPageOptions = [5, 10, 25, 50, 100],
+
+  loading = false,
+  tableHeight = { sm: "57dvh", md: "60dvh", lg: "60dvh" },
+}: DataTableProps<T>) => {
+  const [page, setPage] = useState(initialPage);
+  const [rowsPerPage, setRowsPerPage] = useState(initialRowsPerPage);
+  const [order, setOrder] = useState<"asc" | "desc">("asc");
+  const [orderBy, setOrderBy] = useState<string>();
+
+  // -----------------------------
+  // Visible Columns
+  // -----------------------------
+  const visibleColumns = useMemo(() => {
+    return columns
+      .filter((c) => !c.hidden)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }, [columns]);
+
+  // -----------------------------
+  // Handlers
+  // -----------------------------
+  const handleSort = useCallback(
+    (id: string) => {
+      const col = columns.find((c) => String(c.id) === id);
+      if (col?.sortable === false) return;
+
+      const isAsc = orderBy === id && order === "asc";
+      setOrder(isAsc ? "desc" : "asc");
+      setOrderBy(id);
+      setPage(0);
+    },
+    [columns, order, orderBy]
+  );
+
+  const handlePageChange = useCallback(
+    (_: unknown, newPage: number) => {
+      setPage(newPage);
+      if (serverSide) onServerPageChange?.(newPage, rowsPerPage);
+    },
+    [serverSide, rowsPerPage, onServerPageChange]
+  );
+
+  const handleRowsPerPageChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const size = parseInt(e.target.value, 10);
+      setRowsPerPage(size);
+      setPage(0);
+      if (serverSide) onServerPageChange?.(0, size);
+    },
+    [serverSide, onServerPageChange]
+  );
+
+  // -----------------------------
+  // Data
+  // -----------------------------
+  const sortedRows = useMemo(() => {
+    if (!orderBy || serverSide) return rows;
+    return stableSort(rows, getComparator(order, orderBy));
+  }, [rows, order, orderBy, serverSide]);
+
+  const visibleRows = useMemo(() => {
+    if (serverSide) return rows;
+    const start = page * rowsPerPage;
+    return sortedRows.slice(start, start + rowsPerPage);
+  }, [sortedRows, page, rowsPerPage, serverSide, rows]);
+
+  useEffect(() => {
+    setPage(initialPage);
+  }, [rows, initialPage]);
+
+  const count = serverSide ? totalCount : rows.length;
+
+  // -----------------------------
+  // Render
+  // -----------------------------
+  return (
+    <>
+      <TableContainer sx={{ maxHeight: tableHeight, minHeight: "50vh" }}>
+        <Table stickyHeader>
+          {/* ---------- HEADER ---------- */}
+          <TableHead>
+            <TableRow>
+              {visibleColumns.map((col) => {
+                const colId = String(col.id);
+                const sortable = col.sortable !== false;
+
+                return (
+                  <TableCell
+                    key={colId}
+                    align={col.headerAlign ?? col.align ?? "left"}
+                    className={col.headerClassName}
+                    sx={{
+                      minWidth: col.minWidth,
+                      maxWidth: col.maxWidth,
+                      width: col.width,
+                      position: col.sticky ? "sticky" : undefined,
+                      [col.sticky ?? ""]: col.sticky ? 0 : undefined,
+                      backgroundColor: col.sticky
+                        ? "background.paper"
+                        : undefined,
+                      zIndex: col.sticky ? 2 : 1,
+                      ...col.headerSx,
+                    }}
+                  >
+                    {sortable ? (
+                      <TableSortLabel
+                        active={orderBy === colId}
+                        direction={orderBy === colId ? order : "asc"}
+                        onClick={() => handleSort(colId)}
+                      >
+                        {col.label}
+                      </TableSortLabel>
+                    ) : (
+                      col.label
+                    )}
+                  </TableCell>
+                );
+              })}
+            </TableRow>
+          </TableHead>
+
+          {/* ---------- BODY ---------- */}
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={visibleColumns.length} align="center">
+                  <Box py={4}>
+                    <CircularProgress />
+                  </Box>
+                </TableCell>
+              </TableRow>
+            ) : visibleRows.length ? (
+              visibleRows.map((row, rowIndex) => (
+                <TableRow hover key={String(row[rowKey] ?? rowIndex)}>
+                  {visibleColumns.map((col) => {
+                    const colId = String(col.id);
+                    const rawValue = row[colId];
+
+                    const content =
+                      col.render?.(rawValue, row, rowIndex) ??
+                      col.format?.(rawValue, row) ??
+                      rawValue ??
+                      col.emptyValue ??
+                      "--";
+
+                    return (
+                      <TableCell
+                        key={colId}
+                        align={col.align ?? "left"}
+                        className={col.cellClassName}
+                        sx={{
+                          minWidth: col.minWidth ?? DEFAULT_MIN_WIDTH,
+                          maxWidth: col.maxWidth ?? DEFAULT_MAX_WIDTH,
+                          width: col.width,
+                          position: col.sticky ? "sticky" : undefined,
+                          [col.sticky ?? ""]: col.sticky ? 0 : undefined,
+                          backgroundColor: col.sticky
+                            ? "background.paper"
+                            : undefined,
+                          opacity: col.disabled ? 0.5 : 1,
+                          pointerEvents: col.disabled ? "none" : "auto",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          ...col.cellSx,
+                        }}
+                      >
+                        {content}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={visibleColumns.length} align="center">
+                  <Box py={4}>
+                    <Typography>No records found</Typography>
+                  </Box>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      {/* ---------- PAGINATION ---------- */}
+      <TablePagination
+        component="div"
+        count={count}
+        page={page}
+        rowsPerPage={rowsPerPage}
+        rowsPerPageOptions={rowsPerPageOptions}
+        onPageChange={handlePageChange}
+        onRowsPerPageChange={handleRowsPerPageChange}
+      />
+    </>
+  );
+};
+
+export default DataTable;
+```
+
+## Props
+
+See the `DataTableProps` type definition in the code example above for a complete list of props and their descriptions.
+
+## Best Practices
+
+- Define your columns with clear types and use the `render` and `format` functions for custom cell content.
+- Leverage server-side pagination for large datasets to improve performance.
+- Utilize the built-in sorting functionality to enhance user experience.
+
+---
+
+# how to use Data Table
+
+## Installation
+
+```bash
+pnpm add @mui/material
+```
+
+## Basic Usage
+
+```tsx
+import React from "react";
+import DataTable, { TableColumn } from "@/components/data-table/DataTable";
+type User = {
+  id: number;
+  name: string;
+  email: string;
+  age: number;
+};
+
+const columns: TableColumn<User>[] = [
+  { id: "name", label: "Name", sortable: true },
+  { id: "email", label: "Email", sortable: true },
+  { id: "age", label: "Age", sortable: true, align: "right" },
+];
+
+const rows: User[] = [
+  { id: 1, name: "Alice", email: "alice@example.com", age: 30 },
+  { id: 2, name: "Bob", email: "bob@example.com", age: 25 },
+  { id: 3, name: "Charlie", email: "charlie@example.com", age: 35 },
+];
+
+export default function UserTable() {
+  return <DataTable<User> columns={columns} rows={rows} />;
+}
+```
+
+## Advanced Usage with Server-Side Pagination
+
+```tsx
+import React, { useEffect, useState } from "react";
+import DataTable, { TableColumn } from "@/components/data-table/DataTable";
+type User = {
+  id: number;
+  name: string;
+  email: string;
+  age: number;
+};
+const columns: TableColumn<User>[] = [
+  { id: "name", label: "Name", sortable: true },
+  { id: "email", label: "Email", sortable: true },
+  { id: "age", label: "Age", sortable: true, align: "right" },
+];
+
+export default function ServerSideUserTable() {
+  const [rows, setRows] = useState<User[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  const fetchData = async (page: number, rowsPerPage: number) => {
+    setLoading(true);
+    // Simulate API call
+    const response = await fetch(
+      `/api/users?page=${page + 1}&limit=${rowsPerPage}`
+    );
+    const data = await response.json();
+    setRows(data.users);
+    setTotalCount(data.totalCount);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchData(0, 10); // Initial fetch
+  }, []);
+
+  return (
+    <DataTable<User>
+      columns={columns}
+      rows={rows}
+      serverSide
+      totalCount={totalCount}
+      loading={loading}
+      onServerPageChange={fetchData}
+    />
+  );
+}
+```
+
