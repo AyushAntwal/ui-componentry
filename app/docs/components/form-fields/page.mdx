@@ -1,3 +1,8 @@
+---
+asIndexPage: true
+sidebarTitle: FormField
+---
+
 # FormField
 
 FormField is a modular, type-safe form-field system built with **React Hook Form**, **TypeScript**, and **Material-UI**. It turns each input type into a small, focused component so large, form-heavy apps stay maintainable and predictable. You get strict types (no `any`), tiny well-documented components, and a single predictable integration pattern so teams can add 20–30+ field types without the UI becoming a tangle.
@@ -18,6 +23,14 @@ In short: fewer bugs, faster onboarding, and easier tests.
 ---
 
 # Core idea (how it works)
+
+---
+
+asIndexPage: true
+sidebarTitle: Built-In Components
+icon: BoxIcon
+
+---
 
 1. A tiny **router component** (`FormField.tsx`) picks the right field component by `type` and forwards props.
 2. Each field component (text, number, select, date, etc.) is responsible only for rendering + minimal conversion logic (string ↔ number, iso date ↔ Date, counters, helper text).
