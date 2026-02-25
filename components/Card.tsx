@@ -3,7 +3,7 @@ import Link from "next/link";
 
 interface DashboardCardProps {
   icon?: React.ReactNode;
-  title: string;
+  title?: string;
   footer?: React.ReactNode;
   children: React.ReactNode;
   href?: string;
@@ -17,20 +17,24 @@ const CardContent = ({
 }: Omit<DashboardCardProps, "href">) => (
   <>
     {/* Header */}
-    <div className="mb-3 flex items-center gap-3">
+    <div className="flex items-center gap-3">
       {icon && (
         <div
-          className="flex h-10 w-10 items-center justify-center rounded-lg
-                        bg-gray-100 text-gray-700
-                        dark:bg-neutral-800 dark:text-neutral-300"
-        >
+          className="
+            flex h-10 w-10 items-center justify-center rounded-lg
+            bg-gray-100 text-gray-200
+            dark:bg-gray-800 dark:text-gray-300
+            transition-colors
+          ">
           {icon}
         </div>
       )}
 
-      <h3 className="text-sm font-semibold text-gray-700 dark:text-neutral-300">
-        {title}
-      </h3>
+      {title && (
+        <h3 className="text-sm mb-3 font-semibold text-gray-700 dark:text-gray-200">
+          {title}
+        </h3>
+      )}
     </div>
 
     {/* Content */}
@@ -40,7 +44,7 @@ const CardContent = ({
 
     {/* Footer */}
     {footer && (
-      <div className="mt-2 text-xs text-gray-500 dark:text-neutral-400">
+      <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
         {footer}
       </div>
     )}
@@ -48,9 +52,15 @@ const CardContent = ({
 );
 
 export default function Card(props: DashboardCardProps) {
-  const baseClass =
-    "block rounded-xl border border-gray-200 bg-white p-4 transition-all " +
-    "hover:shadow-md dark:border-neutral-800 dark:bg-neutral-900";
+  const baseClass = `
+    block rounded-xl border
+    border-gray-200 dark:border-gray-700
+    bg-white dark:bg-black
+    p-4
+    transition-all duration-200
+    hover:shadow-md
+    hover:bg-gray-50 dark:hover:bg-gray-900
+  `;
 
   if (props.href) {
     return (

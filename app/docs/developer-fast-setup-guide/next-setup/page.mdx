@@ -1,0 +1,837 @@
+---
+title: Next.js Setup Guide — App Router + TypeScript
+description: A complete setup guide for Next.js projects with the App Router — folder structure, ESLint, Prettier, Husky, API layer, TypeScript types, Tailwind v4, and component patterns.
+date: 2025-01-01
+tags: [nextjs, typescript, tailwind, eslint, prettier, husky, app-router]
+sidebarTitle: Next.js Setup Guide
+---
+
+# Next.js Setup Guide
+
+**App Router · TypeScript · Tailwind v4 · ESLint · Prettier · Husky**
+
+This guide covers a production-grade baseline for Next.js with the App Router. The App Router changes the rules for a few things — data fetching, component colocation, and how the API layer is structured — compared to the Pages Router or a plain React app. Every config in this guide takes those differences into account.
+
+---
+
+## Scaffold the Project
+
+```bash
+pnpm create next-app@latest my-app \
+  --typescript \
+  --tailwind \
+  --app \
+  --eslint \
+  --src-dir \
+  --import-alias "@/*"
+
+cd my-app
+```
+
+This is the starting point. Everything below layers on top.
+
+---
+
+## 1. Folder Structure
+
+The App Router introduces a few structural constraints that don't exist in Vite React. Route segments are folders inside `app/`. Layout files are inherited. Server and Client Components can be colocated. The structure below works with those constraints rather than fighting them.
+
+```txt
+src/
+├── app/                         # Next.js App Router — routing lives here
+│   ├── (auth)/                  # Route group — no URL segment
+│   │   ├── login/
+│   │   │   └── page.tsx
+│   │   └── register/
+│   │       └── page.tsx
+│   ├── (dashboard)/             # Another route group
+│   │   ├── layout.tsx           # Dashboard shell — applies to all routes inside
+│   │   └── settings/
+│   │       └── page.tsx
+│   ├── api/                     # Route handlers
+│   │   └── users/
+│   │       └── route.ts
+│   ├── layout.tsx               # Root layout (html, body, providers)
+│   ├── page.tsx                 # Home route /
+│   └── globals.css              # Tailwind + global tokens
+├── components/
+│   ├── ui/                      # Pure design system primitives
+│   │   ├── button/
+│   │   │   ├── Button.tsx
+│   │   │   ├── Button.types.ts
+│   │   │   └── index.ts
+│   │   └── card/
+│   │       ├── Card.tsx
+│   │       ├── Card.types.ts
+│   │       └── index.ts
+│   └── layout/                  # Shell: Sidebar, Navbar, Footer
+├── features/                    # Self-contained feature modules
+│   └── users/
+│       ├── components/          # Feature-specific UI
+│       ├── actions.ts           # Server Actions for this feature
+│       ├── queries.ts           # Data fetching functions
+│       └── types.ts             # Feature-specific types
+├── lib/
+│   ├── cn.ts                    # Class name utility
+│   ├── http.ts                  # HTTP client (for external APIs)
+│   └── prisma.ts                # Prisma client singleton (if using Prisma)
+├── services/                    # External API service modules
+│   └── user.service.ts
+├── types/
+│   ├── common.ts                # App-wide shared primitives
+│   └── api.ts                   # API response shapes
+└── middleware.ts                # Edge middleware (auth, redirects)
+```
+
+**What's different from plain React:**
+
+Route groups (folders in parentheses like `(auth)`) let you organise related routes without adding URL segments. The `(auth)` folder groups login and register together without `/auth/login` in the URL.
+
+`features/` now contains `actions.ts` alongside components and queries. Server Actions live in the feature that uses them, not in a generic `api/` folder.
+
+`lib/prisma.ts` at the project root is important — more on why in the API section.
+
+Server Components don't need `"use client"`. Only add it when a component needs interactivity, browser APIs, or React hooks. The default is server.
+
+---
+
+## 2. ESLint
+
+```bash
+pnpm add -D @typescript-eslint/eslint-plugin @typescript-eslint/parser eslint-plugin-jsx-a11y
+```
+
+Next.js ships with `eslint-config-next`, which already includes React and React Hooks rules. Extend it rather than replacing it.
+
+### `eslint.config.mjs`
+
+```js
+import { dirname } from "path";
+import { fileURLToPath } from "url";
+import { FlatCompat } from "@eslint/eslintrc";
+import tseslint from "typescript-eslint";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const compat = new FlatCompat({ baseDirectory: __dirname });
+
+export default tseslint.config(
+  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  {
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      // Warn on any — move to error once the codebase is clean
+      "@typescript-eslint/no-explicit-any": "warn",
+
+      // Unused vars are usually a mistake; _ prefix opts out
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+        },
+      ],
+
+      // Enforce import type for type-only imports
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        {
+          prefer: "type-imports",
+        },
+      ],
+
+      // No console.log in production code
+      "no-console": ["warn", { allow: ["warn", "error"] }],
+
+      // Avoid duplicate imports
+      "no-duplicate-imports": "error",
+    },
+  },
+  {
+    // Relax for config files and route handlers
+    files: ["*.config.*", "src/app/api/**/*"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+);
+```
+
+### Scripts
+
+```json
+{
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "typecheck": "tsc --noEmit"
+  }
+}
+```
+
+---
+
+## 3. Prettier
+
+```bash
+pnpm add -D prettier prettier-plugin-tailwindcss
+```
+
+### `.prettierrc.mjs`
+
+```js
+/** @type {import("prettier").Config} */
+const config = {
+  plugins: ["prettier-plugin-tailwindcss"],
+  semi: true,
+  singleQuote: false,
+  trailingComma: "es5",
+  printWidth: 100,
+  tabWidth: 2,
+  jsxSingleQuote: false,
+};
+
+export default config;
+```
+
+### `.prettierignore`
+
+```
+.next
+node_modules
+dist
+public
+*.generated.ts
+pnpm-lock.yaml
+```
+
+### Scripts
+
+```json
+{
+  "scripts": {
+    "format": "prettier src --check",
+    "format:write": "prettier src --write"
+  }
+}
+```
+
+The `prettier-plugin-tailwindcss` plugin sorts Tailwind classes into the canonical order automatically. This keeps diffs clean and means two developers can write the same component in different orders and produce identical output after formatting.
+
+---
+
+## 4. Husky + lint-staged
+
+```bash
+pnpm add -D husky lint-staged
+npx husky init
+```
+
+### Pre-commit hook
+
+```bash
+# .husky/pre-commit
+pnpm lint-staged
+```
+
+### Pre-push hook
+
+```bash
+# .husky/pre-push
+pnpm typecheck
+```
+
+Type checking takes a few seconds — fast enough to run before pushing, slow enough to not run on every commit. Lint is fast enough for pre-commit.
+
+### `package.json` lint-staged config
+
+```json
+{
+  "lint-staged": {
+    "src/**/*.{ts,tsx}": ["eslint --fix", "prettier --write"],
+    "src/**/*.{css,json,md}": ["prettier --write"]
+  }
+}
+```
+
+lint-staged runs only on staged files, so even on a large codebase the pre-commit hook completes in a couple of seconds.
+
+---
+
+## 5. API Layer
+
+The App Router gives you more options than the Pages Router did, and it's worth being intentional about which tool you use for which job.
+
+**Rule of thumb:**
+
+- Data fetching at render time → Server Component with `fetch()` or direct DB access
+- User-triggered data changes → Server Actions
+- External API calls from client components → TanStack Query + a service module
+- Route handlers (`app/api/`) → Only for webhooks, OAuth callbacks, and third-party integrations that require a URL
+
+### Server Component data fetching
+
+```ts
+// features/users/queries.ts
+import { prisma } from "@/lib/prisma";
+import type { User } from "@/types/api";
+
+export async function getUsers(): Promise<User[]> {
+  return prisma.user.findMany({
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function getUserById(id: string): Promise<User | null> {
+  return prisma.user.findUnique({ where: { id } });
+}
+```
+
+```tsx
+// app/(dashboard)/users/page.tsx — Server Component, no "use client"
+import { getUsers } from "@/features/users/queries";
+
+export default async function UsersPage() {
+  const users = await getUsers(); // Direct DB call — no HTTP overhead
+
+  return (
+    <ul>
+      {users.map((user) => (
+        <li key={user.id}>{user.displayName}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Server Actions
+
+```ts
+// features/users/actions.ts
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
+import { createUserSchema } from "@/lib/schemas/user";
+
+export async function createUserAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+
+  const parsed = createUserSchema.safeParse({
+    email: formData.get("email"),
+    displayName: formData.get("displayName"),
+  });
+
+  if (!parsed.success) {
+    return { errors: parsed.error.flatten().fieldErrors };
+  }
+
+  await prisma.user.create({ data: parsed.data });
+
+  revalidatePath("/users");
+  redirect("/users");
+}
+```
+
+```tsx
+// Usage in a Client Component form
+"use client";
+import { createUserAction } from "@/features/users/actions";
+
+export function CreateUserForm() {
+  return (
+    <form action={createUserAction}>
+      <input name="email" type="email" required />
+      <input name="displayName" type="text" required />
+      <button type="submit">Create</button>
+    </form>
+  );
+}
+```
+
+### External API calls (client-side)
+
+When you need to call a third-party API from a Client Component — or when your backend is separate from Next.js — use the same HTTP + service + hook pattern as the React guide.
+
+```ts
+// lib/http.ts — identical to the React version
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+export const http = {
+  get: <T>(url: string) => request<T>(url, { method: "GET" }),
+  post: <T>(url: string, body: unknown) =>
+    request<T>(url, { method: "POST", body: JSON.stringify(body) }),
+  patch: <T>(url: string, body: unknown) =>
+    request<T>(url, { method: "PATCH", body: JSON.stringify(body) }),
+  delete: <T>(url: string) => request<T>(url, { method: "DELETE" }),
+};
+```
+
+```ts
+// services/user.service.ts
+import { http } from "@/lib/http";
+import type { User } from "@/types/api";
+
+export const userService = {
+  getAll: () => http.get<User[]>("/users"),
+  getById: (id: string) => http.get<User>(`/users/${id}`),
+  create: (dto: CreateUserDto) => http.post<User>("/users", dto),
+  update: (id: string, dto: UpdateUserDto) =>
+    http.patch<User>(`/users/${id}`, dto),
+  remove: (id: string) => http.delete<void>(`/users/${id}`),
+};
+```
+
+### Prisma singleton
+
+When using Prisma with Next.js dev server hot reloading, creating a new Prisma Client on every module reload exhausts your database connection pool fast. This singleton prevents it:
+
+```ts
+// lib/prisma.ts
+import { PrismaClient } from "@prisma/client";
+
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log:
+      process.env.NODE_ENV === "development" ? ["query", "error"] : ["error"],
+  });
+
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+```
+
+---
+
+## 6. TypeScript Types
+
+### Where types live
+
+Same rule as the React guide — start local, move up when shared.
+
+```
+src/features/users/types.ts        # Types only used in users feature
+src/types/api.ts                   # All API response shapes
+src/types/common.ts                # Primitives used app-wide
+src/components/ui/*/X.types.ts     # Component prop types
+```
+
+### `types/common.ts`
+
+```ts
+// Branded IDs prevent passing the wrong ID type to a function
+export type UserId = string & { readonly __brand: "UserId" };
+export type PostId = string & { readonly __brand: "PostId" };
+
+export type ISOTimestamp = string & { readonly __brand: "ISOTimestamp" };
+export type Nullable<T> = T | null;
+
+export type RequireFields<T, K extends keyof T> = T & Required<Pick<T, K>>;
+
+// Discriminated union for async state
+export type AsyncState<T> =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "success"; data: T }
+  | { status: "error"; error: Error };
+```
+
+### `types/api.ts`
+
+```ts
+import type { UserId, ISOTimestamp } from "./common";
+
+export interface User {
+  id: UserId;
+  email: string;
+  displayName: string;
+  avatarUrl?: string;
+  role: "user" | "admin";
+  createdAt: ISOTimestamp;
+}
+
+export type CreateUserDto = Pick<User, "email" | "displayName">;
+export type UpdateUserDto = Partial<Pick<User, "displayName" | "avatarUrl">>;
+
+export interface ApiResponse<T> {
+  data: T;
+  message: string;
+  success: boolean;
+}
+
+export interface PaginatedResponse<T> extends ApiResponse<T[]> {
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+```
+
+### Next.js–specific: typed `params` and `searchParams`
+
+Route params in App Router pages are typed differently — they come in as `Promise<{ id: string }>` in Next.js 15:
+
+```tsx
+// app/users/[id]/page.tsx
+interface PageProps {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
+}
+
+export default async function UserPage({ params, searchParams }: PageProps) {
+  const { id } = await params;
+  const { tab } = await searchParams;
+  // ...
+}
+```
+
+---
+
+## 7. Tailwind v4 Theming
+
+Tailwind v4 puts all design tokens in CSS rather than JavaScript. This is the right call — tokens are a CSS concern, and having them in CSS means they're available everywhere, not just in Tailwind class names.
+
+### `src/app/globals.css`
+
+```css
+@import "tailwindcss";
+
+@theme {
+  /* Brand palette */
+  --color-brand-50: #eef6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-500: #1d4ed8;
+  --color-brand-600: #1e40af;
+  --color-brand-900: #1e3a8a;
+
+  /* Semantic aliases — these are what components use */
+  --color-primary: var(--color-brand-500);
+  --color-primary-hover: var(--color-brand-600);
+  --color-surface: #ffffff;
+  --color-surface-muted: #f8fafc;
+  --color-border: #e2e8f0;
+
+  /* Typography */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Fira Code", ui-monospace, monospace;
+
+  /* Spacing / radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-soft: 0 8px 24px rgba(2, 6, 23, 0.08);
+}
+
+/* Dark mode — only tokens change, not component markup */
+@media (prefers-color-scheme: dark) {
+  @theme {
+    --color-primary: var(--color-brand-400);
+    --color-surface: #0f172a;
+    --color-surface-muted: #1e293b;
+    --color-border: #334155;
+  }
+}
+```
+
+**The rule:** use semantic tokens in components, never raw palette values:
+
+```tsx
+// ✅ Survives dark mode and rebranding
+<div className="bg-surface border border-border rounded-lg shadow-card" />
+
+// ❌ Hard-coded — breaks in dark mode, breaks on rebrand
+<div className="bg-white border border-gray-200 rounded-lg shadow-sm" />
+```
+
+Dark mode works because the component uses `bg-surface`, which the `@media` block overrides from `#ffffff` to `#0f172a`. The component markup never changes.
+
+---
+
+## 8. Component Patterns
+
+Same structural rule as the React guide: one folder per component, types in a separate file, everything re-exported through `index.ts`.
+
+### `lib/cn.ts`
+
+```bash
+pnpm add clsx tailwind-merge
+```
+
+```ts
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+```
+
+### Button
+
+```ts
+// components/ui/button/Button.types.ts
+import type { ButtonHTMLAttributes } from "react";
+
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+export type ButtonSize = "sm" | "md" | "lg";
+
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  loading?: boolean;
+  fullWidth?: boolean;
+}
+```
+
+```tsx
+// components/ui/button/Button.tsx
+import { cn } from "@/lib/cn";
+import type { ButtonProps, ButtonVariant, ButtonSize } from "./Button.types";
+
+const variants: Record<ButtonVariant, string> = {
+  primary: "bg-primary text-white hover:bg-primary-hover",
+  secondary:
+    "border border-border bg-surface text-slate-900 hover:bg-surface-muted",
+  ghost: "text-slate-700 hover:bg-surface-muted",
+  danger: "bg-red-600 text-white hover:bg-red-700",
+};
+
+const sizes: Record<ButtonSize, string> = {
+  sm: "px-3 py-1.5 text-xs",
+  md: "px-4 py-2 text-sm",
+  lg: "px-6 py-3 text-base",
+};
+
+export function Button({
+  variant = "primary",
+  size = "md",
+  loading = false,
+  fullWidth = false,
+  className,
+  disabled,
+  children,
+  ...props
+}: ButtonProps) {
+  return (
+    <button
+      className={cn(
+        "inline-flex items-center justify-center rounded-md font-medium",
+        "transition-colors duration-150",
+        "disabled:pointer-events-none disabled:opacity-50",
+        variants[variant],
+        sizes[size],
+        fullWidth && "w-full",
+        className,
+      )}
+      disabled={disabled || loading}
+      aria-busy={loading}
+      {...props}>
+      {loading ? (
+        <span className="flex items-center gap-2">
+          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8v8H4z"
+            />
+          </svg>
+          Loading...
+        </span>
+      ) : (
+        children
+      )}
+    </button>
+  );
+}
+```
+
+```ts
+// components/ui/button/index.ts
+export * from "./Button";
+export * from "./Button.types";
+```
+
+### Server vs. Client Components
+
+The App Router default is Server Component. Add `"use client"` only when you need:
+
+```tsx
+// ✅ Server Component — no directive needed
+export default async function UserCard({ id }: { id: string }) {
+  const user = await getUserById(id); // Direct DB access
+  return <div>{user.displayName}</div>;
+}
+```
+
+```tsx
+// ✅ Client Component — needs browser API / interactivity
+"use client";
+import { useState } from "react";
+
+export function Counter() {
+  const [count, setCount] = useState(0);
+  return <button onClick={() => setCount((c) => c + 1)}>{count}</button>;
+}
+```
+
+A common pattern: Server Component fetches data, passes it as props to a Client Component that handles interaction.
+
+```tsx
+// app/users/[id]/page.tsx — Server Component
+import { UserProfile } from "@/features/users/components/UserProfile";
+import { getUserById } from "@/features/users/queries";
+
+export default async function UserPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const user = await getUserById(id);
+
+  return <UserProfile user={user} />; // Client Component receives typed data
+}
+```
+
+---
+
+## 9. TypeScript Config
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "preserve",
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitReturns": true,
+
+    "baseUrl": ".",
+    "paths": { "@/*": ["./src/*"] },
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowJs": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "incremental": true
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+```
+
+`incremental: true` caches the last typecheck result. Subsequent `tsc --noEmit` runs only recheck changed files — noticeably faster on large codebases.
+
+---
+
+## 10. CI/CD
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Format check
+        run: pnpm format
+
+      - name: Build
+        run: pnpm build
+        env:
+          # Prevent build failing on lint warnings
+          NEXT_TELEMETRY_DISABLED: 1
+```
+
+`--frozen-lockfile` in CI ensures nobody accidentally committed a `pnpm-lock.yaml` out of sync with `package.json`. It fails fast if the lockfile is stale, which is the right behaviour.
+
+---
+
+## Quick Reference
+
+| Command             | Does what                              |
+| ------------------- | -------------------------------------- |
+| `pnpm dev`          | Start dev server with Turbopack        |
+| `pnpm build`        | Production build                       |
+| `pnpm lint`         | Run ESLint                             |
+| `pnpm lint:fix`     | Auto-fix ESLint issues                 |
+| `pnpm typecheck`    | Type-check without emitting            |
+| `pnpm format`       | Check formatting (CI-safe, no changes) |
+| `pnpm format:write` | Format all files in-place              |
+
+---
+
+## Setup Checklist
+
+1. Scaffold with `pnpm create next-app@latest` (App Router + TypeScript + Tailwind + ESLint)
+2. Set up the folder structure from [Section 1](#1-folder-structure)
+3. Replace `eslint.config.mjs` with the config from [Section 2](#2-eslint)
+4. Install Prettier and the Tailwind plugin, add the config from [Section 3](#3-prettier)
+5. Install Husky + lint-staged from [Section 4](#4-husky--lint-staged)
+6. Create `lib/prisma.ts` singleton and first `features/` module from [Section 5](#5-api-layer)
+7. Create `types/common.ts` and `types/api.ts` from [Section 6](#6-typescript-types)
+8. Set up design tokens in `globals.css` using `@theme` from [Section 7](#7-tailwind-v4-theming)
+9. Install `clsx` + `tailwind-merge`, create `lib/cn.ts`, build the Button component
+10. Update `tsconfig.json` with strict options from [Section 9](#9-typescript-config)
+11. Add the GitHub Actions workflow from [Section 10](#10-cicd)

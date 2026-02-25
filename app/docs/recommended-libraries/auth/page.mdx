@@ -1,0 +1,230 @@
+---
+title: Auth — Please Don't Build This Yourself
+description: A plain-language guide to authentication libraries for Next.js and Angular. Auth.js v5, Clerk, Auth0, Keycloak — what they do, what they cost, and how to choose.
+date: 2025-01-01
+sidebarTitle: Auth
+tags:
+  [
+    auth,
+    authentication,
+    authjs,
+    nextauth,
+    clerk,
+    auth0,
+    keycloak,
+    angular,
+    nextjs,
+  ]
+---
+
+# Auth — Please Don't Build This Yourself
+
+Authentication is the category where we're going to be the most direct: **do not build this from scratch**.
+
+It's not that it's technically difficult. It's that the list of things that need to be done _correctly_ is long — token storage, CSRF protection, token rotation, refresh token handling, session invalidation on logout, OAuth PKCE flow, timing attack prevention, brute force protection — and the cost of getting any one of them wrong is a security incident.
+
+Authentication libraries exist specifically to handle this list so you don't have to. The question is which one fits your situation.
+
+---
+
+## React / Next.js
+
+### The Comparison
+
+| Library           | Self-hosted   | OAuth     | Credentials | Edge ready | Price     | Best for              |
+| ----------------- | ------------- | --------- | ----------- | ---------- | --------- | --------------------- |
+| **Auth.js v5** ⭐ | ✅            | ✅ 80+    | ✅          | ✅         | Free      | Ownership, App Router |
+| **Clerk**         | ❌ SaaS       | ✅        | ✅          | ✅         | Free tier | Fastest setup         |
+| **Lucia**         | ✅            | ⚠️ Manual | ✅          | ✅         | Free      | Custom flows          |
+| **Supabase Auth** | ✅ (Supabase) | ✅        | ✅          | ⚠️         | Free tier | Already on Supabase   |
+| **Firebase Auth** | ❌ Google     | ✅        | ✅          | ⚠️         | Free tier | Already on Firebase   |
+
+---
+
+### Auth.js v5 — Our Default Pick
+
+Auth.js v5 is a full rewrite of NextAuth, built from the ground up for the App Router, Server Components, Server Actions, and the Vercel Edge runtime. If you're starting a new Next.js project and need authentication, this is where to start.
+
+The key principle of Auth.js is that you own everything. Your users' data stays in your database. Your tokens stay in your infrastructure. There's no third-party service receiving user information. For compliance-sensitive projects, that matters a lot.
+
+**What makes it great:**
+
+- Completely free — no per-user pricing, no usage limits
+- 80+ OAuth providers are configured with one import. Google, GitHub, Discord, Apple, Twitter, and most others are one line to add
+- Works in Server Components (`await auth()`), Middleware (route protection), and Server Actions (sign in and out without a client round-trip)
+- Edge runtime compatible — the middleware runs on Vercel's or Cloudflare's edge without issues
+- JWT or database sessions, your choice. Add the Prisma adapter for database sessions in a couple of lines
+- Your sign-in page is just a React component — no constraints on how it looks
+
+**What to watch out for:**
+
+- v5 is technically in beta, though it's stable enough that most production projects are already on it
+- There's no pre-built UI. You design the sign-in page yourself, which is more work upfront but means no constraints
+- Database sessions require setting up the adapter and having the right schema — a bit of setup cost
+
+**When to use it:** When you need full ownership of your auth system, are building a production app with compliance requirements, or simply want a robust solution with no per-user pricing at scale.
+
+---
+
+### Clerk — When Speed Matters More Than Ownership
+
+Clerk is a hosted authentication platform. It provides a complete auth system — sign-in, sign-up, user profiles, organisation management, MFA, passkeys — with pre-built React components and excellent Next.js integration.
+
+The difference from Auth.js is philosophical. With Clerk, the tradeoff is clear: give up data ownership in exchange for not building any auth UI and having a working system in 15 minutes. Whether that's a good deal depends on your situation.
+
+**What makes it great:**
+
+- You can have working auth without writing a single form — the pre-built components handle sign-in, sign-up, and profile management
+- MFA, passkeys, device management, and session management are just there. You don't configure them
+- Org/team management with roles and permissions is built-in — a significant amount of work if you were building it yourself
+- The App Router and Middleware integration is first-class
+- The DX is genuinely excellent, especially for getting something running fast
+
+**What to watch out for:**
+
+- User data lives on Clerk's servers. For GDPR-sensitive markets or highly regulated industries, this is potentially a blocker
+- The free tier is generous, but per-MAU pricing kicks in at scale — something to model out before committing
+- If you decide to move off Clerk later, migration is non-trivial. You're building on top of their user model, not your own
+
+**When to use it:** Hackathons, prototypes, internal tools, or early-stage products where speed matters more than data sovereignty. Revisit the decision before you hit scale.
+
+---
+
+### Lucia — Maximum Control
+
+Lucia is a very different kind of auth library. It doesn't provide OAuth flows or email/password out of the box — it provides a session management layer and lets you wire everything else yourself. It's database-first, completely transparent, and framework-agnostic.
+
+**What makes it great:**
+
+- You own every part of the session lifecycle — there's no magic
+- Excellent for custom authentication schemes: passkeys only, magic links, WebAuthn, multi-tenant setups
+- No SaaS dependency, no pricing surprises
+- Framework-agnostic — the same pattern works in Next.js, Astro, SvelteKit, and plain Node
+
+**What to watch out for:**
+
+- OAuth requires significantly more setup than Auth.js — you wire the redirect, the callback, the token exchange
+- Smaller community means fewer answers on StackOverflow when something doesn't work
+- More setup overall — this is not the choice when you want to move quickly
+
+**When to use it:** You have a genuinely custom authentication requirement that Auth.js's abstractions get in the way of, and you're comfortable building the parts that Lucia leaves open.
+
+---
+
+## Angular
+
+### The Comparison
+
+| Library                  | Self-hosted | OAuth/OIDC | SSO | Angular DI | Price     | Best for               |
+| ------------------------ | ----------- | ---------- | --- | ---------- | --------- | ---------------------- |
+| **Auth0 Angular SDK** ⭐ | ❌ SaaS     | ✅         | ✅  | ✅         | Free tier | Most Angular apps      |
+| **Keycloak Angular**     | ✅          | ✅ OIDC    | ✅  | ✅         | Free      | Enterprise, on-premise |
+| **angular-oauth2-oidc**  | ✅          | ✅ OIDC    | ✅  | ✅         | Free      | Custom OIDC provider   |
+| **Firebase Auth**        | ❌ Google   | ✅         | ❌  | ⚠️         | Free tier | Already on Firebase    |
+| **Supabase Auth**        | ✅          | ✅         | ❌  | ⚠️         | Free tier | Already on Supabase    |
+
+---
+
+### Auth0 Angular SDK — The Easiest Path to Production
+
+Auth0 has a first-class Angular SDK that integrates directly with Angular's dependency injection system. You get an `AuthModule`, an `AuthGuard` you attach to routes, an `AuthHttpInterceptor` that attaches JWTs to outgoing requests, and an `AuthService` you inject wherever you need auth state.
+
+Auth0 handles the hard parts: PKCE for public clients, silent token refresh, device fingerprinting, MFA, and SSO. Your Angular app just calls `this.auth.loginWithRedirect()` and Auth0 does the rest.
+
+**What makes it great:**
+
+- The DI integration is proper Angular — `inject(AuthService)` just works
+- Route protection is one line: add `AuthGuard` to your route config
+- `AuthHttpInterceptor` automatically attaches access tokens to requests you whitelist — no manual header management
+- Universal Login gives you a hosted sign-in page that you can theme, or you can redirect back to your own page
+- MFA, social login, and SSO are configuration, not code
+
+**What to watch out for:**
+
+- Like Clerk, user data lives on Auth0's servers — the SaaS trade-off applies here too
+- The free tier covers 7,500 MAU — generous for most apps, but the pricing curve at scale is worth understanding before committing
+- Auth0 tenant setup adds a step compared to a self-hosted solution
+
+**When to use it:** Most Angular apps. Unless you have a specific reason not to send user data to a third party, Auth0 is significantly less work than the alternatives and the result is production-grade from day one.
+
+---
+
+### Keycloak Angular — For When You Need Full Control
+
+Keycloak is an open-source identity and access management server that you run yourself. The `keycloak-angular` library wraps the Keycloak JavaScript adapter with Angular-friendly services and guards.
+
+This is the choice when your organisation can't or won't use a SaaS identity provider — on-premise deployments, government, financial services, healthcare, or situations where strict EU data residency is required.
+
+**What makes it great:**
+
+- Completely self-hosted — your user data never leaves your infrastructure
+- Enterprise SSO is a first-class feature: SAML, LDAP, Active Directory integration out of the box
+- No per-user cost, ever
+- Fine-grained roles and permissions through Keycloak's admin console
+- EU data residency compliant by default — you control where it runs
+
+**What to watch out for:**
+
+- You're running a server. Keycloak requires infrastructure, monitoring, updates, and backups — ongoing operational cost
+- The setup is significantly more involved than Auth0
+- Keycloak itself has a learning curve — there are many concepts (realms, clients, flows) to understand
+- `keycloak-angular` sometimes lags behind Keycloak server releases
+
+**When to use it:** Enterprise environments, regulated industries, on-premise requirements, or organisations that have a policy against third-party identity SaaS.
+
+---
+
+### angular-oauth2-oidc — When You Have an Existing OIDC Provider
+
+If your backend already exposes an OIDC-compliant endpoint — a custom identity server, an existing enterprise system, or a provider whose specific SDK doesn't have Angular support — `angular-oauth2-oidc` gives you a provider-agnostic client that handles the OAuth2/OIDC flows correctly.
+
+**What makes it great:**
+
+- Works with any standards-compliant OIDC provider
+- Pure Angular — no lock-in to a specific identity service
+- Handles PKCE, authorization code flow, and silent refresh
+
+**What to watch out for:**
+
+- More manual wiring than Auth0 — no magic, you configure each piece
+- No pre-built UI
+- Recent maintenance has been slower than the other options on this list
+
+**When to use it:** You have an existing OIDC provider that isn't one of the above options, and you don't want to commit to a specific vendor SDK.
+
+---
+
+## What Every Auth Setup Needs to Get Right
+
+Whatever library and framework you're using, these fundamentals have to be correct. Most libraries handle them, but it's worth knowing what you're relying on.
+
+| What                                           | Why it matters                                                                  |
+| ---------------------------------------------- | ------------------------------------------------------------------------------- |
+| JWTs in `httpOnly` cookies, not `localStorage` | `localStorage` is accessible to JavaScript — any XSS vulnerability leaks tokens |
+| SameSite cookie attributes or CSRF tokens      | Prevents cross-site request forgery                                             |
+| Automatic silent token refresh                 | Tokens expire; users shouldn't get logged out mid-session                       |
+| Route protection at middleware/guard level     | Don't rely on hiding UI elements — protect the routes themselves                |
+| Server-side logout                             | Clearing a cookie isn't enough — the token needs to be revoked                  |
+| 401 handling                                   | Expired sessions should redirect to login, not show a broken page               |
+
+---
+
+## The Short Answer
+
+```
+Next.js app?
+→ Auth.js v5 — ownership, free, App Router-native.
+→ Clerk — if you need working auth in an hour and data ownership isn't a constraint.
+→ Lucia — if your auth flow is custom and you want maximum control.
+
+Angular app?
+→ Auth0 — easiest path to production, excellent Angular DI integration.
+→ Keycloak — if on-premise, enterprise SSO, or strict data residency is required.
+→ angular-oauth2-oidc — if you already have an OIDC provider you need to connect to.
+
+Already on Supabase or Firebase?
+→ Use their auth module. Adding another auth library on top makes no sense.
+
+Hard compliance or data residency requirements?
+→ Auth.js (React) or Keycloak (Angular) — both are fully self-hosted.
+```

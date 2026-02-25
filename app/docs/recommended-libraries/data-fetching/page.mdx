@@ -1,0 +1,194 @@
+---
+title: Data Fetching — There's More to It Than fetch()
+description: When to use TanStack Query, SWR, Angular HttpClient, and when Next.js's native fetch is genuinely all you need.
+date: 2025-01-01
+tags: [data-fetching, tanstack-query, swr, angular, nextjs]
+sidebarTitle: Data Fetching
+---
+
+# Data Fetching — There's More to It Than `fetch()`
+
+Here's a pattern that plays out on almost every project. A developer writes a clean `fetch()` call in a `useEffect`. It works. Then the requirements grow: show a loading spinner, handle errors gracefully, don't show stale data, refresh when the user comes back to the tab, retry on network failure, update the UI before the server responds...
+
+Six months later, that one `useEffect` has become a state machine with eight `useState` calls and a handful of `useRef`s keeping it from firing twice in development.
+
+A data fetching library solves all of that. The question is which one, and when you actually need one.
+
+---
+
+## First, Understand What You're Fetching
+
+The right answer depends heavily on _where_ the data is being used, especially in Next.js.
+
+| Situation                                          | Best approach                               |
+| -------------------------------------------------- | ------------------------------------------- |
+| Server Component — data loaded at render time      | Native `fetch()` with Next.js cache options |
+| Client Component — data driven by user interaction | TanStack Query or SWR                       |
+| Client Component — simple, read-only, no mutations | SWR                                         |
+| Angular with complex caching/mutations             | HttpClient + TanStack Query                 |
+| Angular with simple one-off requests               | HttpClient alone                            |
+| GraphQL API (either framework)                     | Apollo Client                               |
+
+---
+
+## React / Next.js
+
+### The Comparison
+
+| Library               | Caching             | Mutations     | DevTools | Size           | Best for                           |
+| --------------------- | ------------------- | ------------- | -------- | -------------- | ---------------------------------- |
+| **TanStack Query** ⭐ | ✅ Powerful         | ✅ Optimistic | ✅       | ~13 kb         | Client data, mutations, pagination |
+| **SWR**               | ✅ Basic            | ⚠️ Manual     | ❌       | ~4 kb          | Simple read-heavy apps             |
+| **RTK Query**         | ✅                  | ✅            | ✅       | Bundled in RTK | Already using Redux Toolkit        |
+| **Apollo Client**     | ✅                  | ✅            | ✅       | ~47 kb         | GraphQL only                       |
+| **Native fetch**      | ✅ Next.js extended | —             | —        | 0 kb           | Server Components                  |
+
+---
+
+### TanStack Query — The Industry Standard
+
+TanStack Query (previously React Query) has become the go-to for client-side data management in React, and for good reason. It treats data from your server as _server state_ — something your app doesn't own, just borrows — and manages the full lifecycle of that borrowed data.
+
+You get automatic caching, background refetching, stale-while-revalidate behavior, request deduplication, and optimistic updates — all without writing the plumbing yourself.
+
+**What makes it great:**
+
+- Every query is automatically cached and deduped — fire the same query from five components and only one network request goes out
+- Stale data shows immediately while fresh data loads in the background, so the UI never feels slow
+- `useMutation` with `onMutate` and `onError` handles optimistic updates and rollback cleanly
+- The DevTools are genuinely useful — you can see every query in your app, its status, and its cached data in real time
+- `useInfiniteQuery` makes pagination and infinite scroll much less painful than rolling your own
+- The same API works in Angular, Vue, and Solid — knowledge transfers
+
+**What to watch out for:**
+
+- You need to wrap your app with a `QueryClientProvider`, which is a minor setup cost
+- At ~13 kb it's larger than SWR, though still reasonable
+- The biggest adjustment is the mental model shift: server state lives in TanStack Query, client state lives in Zustand. They don't overlap
+
+**When to use it:** Any client component that fetches data from an API, especially if you need mutations, pagination, or background refreshes.
+
+---
+
+### SWR — Smaller and Simpler
+
+SWR was built by the Vercel team specifically with Next.js in mind. SWR stands for "stale-while-revalidate" — it shows cached data immediately while validating against the server in the background.
+
+**What makes it great:**
+
+- Tiny bundle (~4 kb)
+- Dead simple API — one `useSWR(key, fetcher)` call covers most cases
+- Automatic revalidation on window focus and network reconnect
+- Native Next.js integration, maintained by the same company
+
+**What to watch out for:**
+
+- No built-in `useMutation` — you're on your own for POST/PUT/DELETE requests
+- No optimistic update helpers
+- DevTools require a separate package
+- Pagination support is basic compared to TanStack Query
+
+**When to use it:** Apps that are mostly read-heavy with simple requirements — display data, refresh it periodically, show loading state. Once mutations get complex, move to TanStack Query.
+
+---
+
+### Native fetch in Server Components — Don't Overcomplicate It
+
+One of Next.js App Router's biggest wins is that data fetching in Server Components is just... `fetch()`. No hooks, no providers, no loading state. The component is async, you await your data, and you return JSX. Next.js extends the native `fetch` API with caching and revalidation options.
+
+```ts
+// This is a complete Server Component with data fetching
+export default async function PostsPage() {
+  const posts = await fetch('/api/posts', {
+    next: { revalidate: 60 }  // revalidate every 60 seconds
+  }).then(r => r.json())
+
+  return <PostList posts={posts} />
+}
+```
+
+**What makes it great:**
+
+- Zero bundle cost — runs entirely on the server
+- Full access to headers, cookies, and auth without client-side exposure
+- Next.js cache options (`revalidate`, `tags`) give you ISR-style control
+- No loading spinners — data is ready before the component renders
+
+**When it's not enough:** When the user drives the data (search, filters, pagination), or when you need to refetch after mutations. At that point, move the component or the data-fetching logic to the client with TanStack Query.
+
+---
+
+## Angular
+
+### The Comparison
+
+| Library                            | Caching     | Mutations | RxJS     | Size            | Best for                 |
+| ---------------------------------- | ----------- | --------- | -------- | --------------- | ------------------------ |
+| **HttpClient + TanStack Query** ⭐ | ✅ Powerful | ✅        | Optional | ~13 kb          | Complex data, pagination |
+| **HttpClient alone**               | ❌          | Manual    | ✅       | 0 kb (built-in) | Simple one-off requests  |
+| **Apollo Client**                  | ✅          | ✅        | ✅       | ~47 kb          | GraphQL APIs             |
+| **NgRx Effects + RTK Query**       | ✅          | ✅        | ✅       | ~50 kb          | Already on NgRx Store    |
+
+---
+
+### HttpClient + TanStack Query — The Modern Combo
+
+Angular's `HttpClient` is a solid HTTP layer — it handles interceptors, error handling, and type safety well. Its weakness is that it doesn't do caching or background refetching. That's where TanStack Query for Angular fills the gap.
+
+The Angular adapter exposes `injectQuery` and `injectMutation`, which plug directly into Angular's dependency injection system and work natively with Signals. Your React teammates will recognise the pattern immediately.
+
+**What makes it great:**
+
+- Same TanStack Query mental model as React — knowledge transfers across your team
+- `injectQuery` is a function call in your constructor/service, not a hook, so it fits Angular DI cleanly
+- Full caching, background refetch, and the DevTools all carry over
+- Signals-compatible, so it works alongside NgRx Signals
+- Optimistic mutations with rollback work exactly like they do in React
+
+**What to watch out for:**
+
+- The `@tanstack/angular-query-experimental` package is still marked experimental — the API could change
+- It adds a dependency on top of HttpClient, which some teams resist
+- For Angular-only developers, the concepts (query keys, staleness, invalidation) need learning
+
+**When to use it:** Any Angular app that needs more than simple data loading — pagination, optimistic updates, background polling, or data that multiple components consume from the same endpoint.
+
+---
+
+### HttpClient Alone — It's Enough for Simple Cases
+
+Angular's `HttpClient` is excellent for what it does. Interceptors handle auth headers and logging. The RxJS integration is clean. TypeScript support is solid.
+
+The gap shows up when you need caching or mutations with side effects. Without a layer on top, you're writing that infrastructure yourself — loading state booleans, error handling, retry logic, manual cache invalidation.
+
+**When it's enough:** Config loading at startup, one-off form submissions, simple GET requests on a single page where you don't need to share or cache the result.
+
+**When to move on:** The moment you find yourself writing the same loading/error state pattern in multiple services, or when you need to keep data in sync across components.
+
+---
+
+### Apollo Client — GraphQL Only
+
+Apollo is the best client for GraphQL. It normalises the cache, handles subscriptions, and manages complex query relationships. It also has an Angular integration.
+
+If your backend is GraphQL, use Apollo. If it's REST, Apollo doesn't fit and you'll spend your time working around it. The `~47 kb` bundle cost only makes sense when you're getting the full benefit of the normalised cache and GraphQL-specific features.
+
+---
+
+## The Short Answer
+
+```
+Next.js Server Component fetching data?
+→ Native fetch() with revalidate options. No library needed.
+
+React client component with API calls?
+→ TanStack Query by default.
+→ SWR if your app is read-only and mutations are minimal.
+
+Angular app with real data needs?
+→ HttpClient + TanStack Query (injectQuery).
+→ HttpClient alone for simple, one-off requests.
+
+GraphQL backend?
+→ Apollo Client regardless of framework.
+```

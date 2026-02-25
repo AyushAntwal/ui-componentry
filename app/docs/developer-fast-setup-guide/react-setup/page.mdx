@@ -1,0 +1,893 @@
+---
+title: React Setup Guide — Vite + TypeScript
+description: A complete setup guide for React projects with Vite — folder structure, ESLint, Prettier, Husky, API layer, TypeScript types, Tailwind, and component patterns.
+date: 2025-01-01
+tags: [react, vite, typescript, eslint, prettier, husky, tailwind]
+sidebarTitle: React Setup Guide
+---
+
+# React Setup Guide
+
+**Vite · TypeScript · Tailwind v4 · ESLint · Prettier · Husky**
+
+This is the baseline for a plain React project using Vite. No opinions about routing, no server-side rendering — a clean slate you can build any SPA, dashboard, or component library on top of.
+
+Follow this from the top and you'll have a project that's consistent, type-safe, and set up to catch problems before they reach code review.
+
+---
+
+## Scaffold the Project
+
+```bash
+pnpm create vite@latest my-app --template react-ts
+cd my-app
+pnpm install
+```
+
+This gets you React 19, TypeScript, and Vite. The rest of this guide layers everything else on top.
+
+---
+
+## 1. Folder Structure
+
+There's no single correct folder structure, but there are structures that age well and ones that don't. The one that ages best puts things where you'd naturally go looking for them, and doesn't create abstraction folders until there's a real reason for them.
+
+```txt
+src/
+├── assets/                  # Static files: images, fonts, icons
+├── components/
+│   ├── ui/                  # Pure design system primitives
+│   │   ├── button/
+│   │   │   ├── Button.tsx
+│   │   │   ├── Button.types.ts
+│   │   │   └── index.ts
+│   │   └── card/
+│   │       ├── Card.tsx
+│   │       ├── Card.types.ts
+│   │       └── index.ts
+│   └── layout/              # Shell components: Sidebar, Navbar, Footer
+├── features/                # Self-contained feature modules
+│   └── auth/
+│       ├── components/      # Feature-specific components
+│       ├── hooks/           # Feature-specific hooks
+│       ├── api.ts           # API calls for this feature
+│       └── types.ts         # Types for this feature
+├── hooks/                   # Shared hooks used across features
+├── lib/
+│   ├── cn.ts                # Class name utility
+│   └── http.ts              # Base HTTP client
+├── services/                # API service modules
+│   └── user.service.ts
+├── types/
+│   ├── common.ts            # App-wide shared primitives
+│   └── api.ts               # API response shapes
+├── App.tsx
+├── main.tsx
+└── index.css
+```
+
+**The rules that matter:**
+
+A `features/` folder is the most important structural decision here. Each feature is a self-contained module — its own components, hooks, API calls, and types. When you delete a feature, you delete one folder. When you're working on a feature, everything you need is in one place.
+
+Don't create `hooks/`, `utils/`, or `helpers/` at the top level until you have three things that belong there. Creating them empty as "future scaffolding" means they'll fill up with whatever doesn't fit elsewhere.
+
+`components/ui/` is for pure UI primitives with no business logic. If a component in `ui/` needs to call an API or read from a feature's state, it shouldn't be in `ui/`.
+
+`lib/` is for utility functions with no React imports. The moment you import from React in a `lib/` file, that function belongs in `hooks/` or `components/` instead.
+
+---
+
+## 2. ESLint
+
+The goal of ESLint configuration is to catch things that are genuinely bugs or likely mistakes — not to enforce cosmetic preferences (that's Prettier's job). Every rule should earn its place.
+
+### Installation
+
+```bash
+pnpm add -D eslint @eslint/js typescript-eslint eslint-plugin-react eslint-plugin-react-hooks eslint-plugin-jsx-a11y
+```
+
+### `eslint.config.mjs`
+
+```js
+import js from "@eslint/js";
+import tseslint from "typescript-eslint";
+import reactPlugin from "eslint-plugin-react";
+import reactHooks from "eslint-plugin-react-hooks";
+import jsxA11y from "eslint-plugin-jsx-a11y";
+
+export default tseslint.config(
+  js.configs.recommended,
+  ...tseslint.configs.recommendedTypeChecked,
+  {
+    plugins: {
+      react: reactPlugin,
+      "react-hooks": reactHooks,
+      "jsx-a11y": jsxA11y,
+    },
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    settings: {
+      react: { version: "detect" },
+    },
+    rules: {
+      // React
+      "react/react-in-jsx-scope": "off", // Not needed in React 17+
+      "react/prop-types": "off", // TypeScript handles this
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
+
+      // TypeScript
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+        },
+      ],
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        {
+          prefer: "type-imports",
+        },
+      ],
+
+      // General
+      "no-console": ["warn", { allow: ["warn", "error"] }],
+      "no-duplicate-imports": "error",
+
+      // Accessibility
+      "jsx-a11y/alt-text": "error",
+      "jsx-a11y/anchor-is-valid": "error",
+    },
+  },
+  {
+    // Relax rules for config and script files
+    files: ["*.config.*", "scripts/**/*"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+);
+```
+
+A few rules worth explaining:
+
+`consistent-type-imports` enforces `import type { Foo }` for type-only imports. This makes it explicit when you're importing a value vs. a type, which matters for tree-shaking and occasionally for circular dependency debugging.
+
+`no-console` with `allow: ["warn", "error"]` means `console.log` in production code flags a warning but `console.warn` and `console.error` are fine — those are intentional.
+
+`exhaustive-deps` as a warning rather than error is pragmatic — it catches real mistakes but occasionally has false positives with stable references that ESLint can't verify.
+
+### Scripts
+
+```json
+{
+  "scripts": {
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "typecheck": "tsc --noEmit"
+  }
+}
+```
+
+Run both in CI. They catch different problems — ESLint catches patterns, TypeScript catches type errors.
+
+---
+
+## 3. Prettier
+
+Prettier eliminates every formatting argument from code review. Once it's running, the formatter decides — not the developer, not the reviewer.
+
+```bash
+pnpm add -D prettier prettier-plugin-tailwindcss
+```
+
+### `.prettierrc.mjs`
+
+```js
+/** @type {import("prettier").Config} */
+const config = {
+  plugins: ["prettier-plugin-tailwindcss"],
+  semi: true,
+  singleQuote: false,
+  trailingComma: "es5",
+  printWidth: 100,
+  tabWidth: 2,
+  jsxSingleQuote: false,
+};
+
+export default config;
+```
+
+### `.prettierignore`
+
+```
+dist
+node_modules
+coverage
+public
+*.generated.ts
+pnpm-lock.yaml
+```
+
+### Scripts
+
+```json
+{
+  "scripts": {
+    "format": "prettier src --check",
+    "format:write": "prettier src --write"
+  }
+}
+```
+
+`format` is for CI — it exits non-zero if anything would change, without changing it. `format:write` is for local use. Don't run `--write` in CI; it creates commits from the CI runner.
+
+---
+
+## 4. Husky + lint-staged
+
+Husky runs scripts at Git hook points. lint-staged runs linters only on the files you've actually changed, which keeps the pre-commit hook fast even on large repos.
+
+The goal: catch lint errors and formatting issues before they're committed, not after they're reviewed.
+
+### Setup
+
+```bash
+pnpm add -D husky lint-staged
+npx husky init
+```
+
+This creates a `.husky/` directory and adds a `prepare` script to `package.json`.
+
+### Pre-commit hook
+
+```bash
+# .husky/pre-commit
+pnpm lint-staged
+```
+
+### Pre-push hook (optional but recommended)
+
+```bash
+# .husky/pre-push
+pnpm typecheck
+```
+
+TypeScript type checking is slower than lint, so it runs on push rather than commit. Lint runs on commit where the feedback is fastest.
+
+### `package.json` — lint-staged config
+
+```json
+{
+  "lint-staged": {
+    "src/**/*.{ts,tsx}": ["eslint --fix", "prettier --write"],
+    "src/**/*.{css,json,md}": ["prettier --write"]
+  }
+}
+```
+
+lint-staged runs ESLint with `--fix` first, then Prettier. The fix order matters — ESLint may introduce formatting changes that Prettier then normalises.
+
+---
+
+## 5. API Layer
+
+The single most common structural mistake in React projects is writing API calls directly in components or custom hooks. It feels convenient early on and becomes a maintenance problem as the app grows — logic gets duplicated, error handling is inconsistent, and there's no single place to add auth headers or handle 401 responses.
+
+A proper API layer has three levels: a base HTTP client, service modules per resource, and hooks that connect services to components.
+
+### Base HTTP client
+
+```ts
+// lib/http.ts
+const BASE_URL = import.meta.env.VITE_API_URL ?? "";
+
+class HttpError extends Error {
+  constructor(
+    public status: number,
+    public statusText: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "HttpError";
+  }
+}
+
+async function request<T>(
+  endpoint: string,
+  options: RequestInit = {},
+): Promise<T> {
+  const token = localStorage.getItem("access_token");
+
+  const res = await fetch(`${BASE_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  });
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      // Token expired — redirect to login
+      window.location.href = "/login";
+    }
+    throw new HttpError(res.status, res.statusText, await res.text());
+  }
+
+  // Handle empty responses (204 No Content)
+  const contentType = res.headers.get("Content-Type");
+  if (!contentType?.includes("application/json")) {
+    return undefined as T;
+  }
+
+  return res.json() as Promise<T>;
+}
+
+export const http = {
+  get: <T>(url: string, opts?: RequestInit) =>
+    request<T>(url, { ...opts, method: "GET" }),
+  post: <T>(url: string, body: unknown, opts?: RequestInit) =>
+    request<T>(url, { ...opts, method: "POST", body: JSON.stringify(body) }),
+  put: <T>(url: string, body: unknown, opts?: RequestInit) =>
+    request<T>(url, { ...opts, method: "PUT", body: JSON.stringify(body) }),
+  patch: <T>(url: string, body: unknown, opts?: RequestInit) =>
+    request<T>(url, { ...opts, method: "PATCH", body: JSON.stringify(body) }),
+  delete: <T>(url: string, opts?: RequestInit) =>
+    request<T>(url, { ...opts, method: "DELETE" }),
+};
+```
+
+### Service module
+
+```ts
+// services/user.service.ts
+import { http } from "@/lib/http";
+import type { User, CreateUserDto, UpdateUserDto } from "@/types/api";
+
+export const userService = {
+  getAll: () => http.get<User[]>("/users"),
+
+  getById: (id: string) => http.get<User>(`/users/${id}`),
+
+  create: (dto: CreateUserDto) => http.post<User>("/users", dto),
+
+  update: (id: string, dto: UpdateUserDto) =>
+    http.patch<User>(`/users/${id}`, dto),
+
+  remove: (id: string) => http.delete<void>(`/users/${id}`),
+};
+```
+
+### Connected to TanStack Query
+
+```ts
+// features/users/hooks/use-users.ts
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { userService } from "@/services/user.service";
+
+export const userKeys = {
+  all: () => ["users"] as const,
+  detail: (id: string) => ["users", id] as const,
+};
+
+export function useUsers() {
+  return useQuery({
+    queryKey: userKeys.all(),
+    queryFn: userService.getAll,
+  });
+}
+
+export function useUser(id: string) {
+  return useQuery({
+    queryKey: userKeys.detail(id),
+    queryFn: () => userService.getById(id),
+    enabled: !!id,
+  });
+}
+
+export function useDeleteUser() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: userService.remove,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: userKeys.all() });
+    },
+  });
+}
+```
+
+This separation means:
+
+- The HTTP mechanics (auth headers, error handling, base URL) live in one place
+- The resource-specific endpoints live in service files, one per resource
+- The React-specific concerns (caching, loading state, refetching) live in hooks
+- Components just call hooks and render data
+
+---
+
+## 6. TypeScript Types
+
+Types are documentation that the compiler checks. A good type strategy makes the codebase easier to understand and harder to break accidentally.
+
+### Where types live
+
+The rule: start local, move up when shared.
+
+```
+src/features/auth/types.ts       # Types only used in auth
+src/types/api.ts                 # API response shapes — used across features
+src/types/common.ts              # Primitives used everywhere
+components/ui/button/Button.types.ts  # Props for one component
+```
+
+### `types/common.ts`
+
+```ts
+// Branded types prevent accidentally mixing IDs
+export type UserId = string & { readonly __brand: "UserId" };
+export type PostId = string & { readonly __brand: "PostId" };
+export type ProductId = string & { readonly __brand: "ProductId" };
+
+// ISO 8601 date — makes intent clear in signatures
+export type ISOTimestamp = string & { readonly __brand: "ISOTimestamp" };
+
+// Nullable — more explicit than T | null
+export type Nullable<T> = T | null;
+
+// Make selected keys required on an otherwise partial type
+export type RequireFields<T, K extends keyof T> = T & Required<Pick<T, K>>;
+
+// Async state pattern — mirrors TanStack Query's shape
+export type AsyncState<T> =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "success"; data: T }
+  | { status: "error"; error: Error };
+```
+
+### `types/api.ts`
+
+```ts
+// Wrap every API response in a consistent envelope
+export interface ApiResponse<T> {
+  data: T;
+  message: string;
+  success: boolean;
+}
+
+export interface PaginatedResponse<T> extends ApiResponse<T[]> {
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export interface ApiError {
+  message: string;
+  statusCode: number;
+  errors?: Record<string, string[]>;
+}
+
+// Feature types
+export interface User {
+  id: UserId;
+  email: string;
+  displayName: string;
+  avatarUrl?: string;
+  createdAt: ISOTimestamp;
+}
+
+export type CreateUserDto = Pick<User, "email" | "displayName">;
+export type UpdateUserDto = Partial<Pick<User, "displayName" | "avatarUrl">>;
+```
+
+### The rules
+
+Use `interface` for object-shaped contracts — component props, API responses, service DTOs. Use `type` for everything else — unions, intersections, utility compositions.
+
+Never use `any`. When the shape is unknown, use `unknown` and write a type guard. When you're at a third-party library boundary that requires `any`, isolate it in one file and wrap it in a typed function.
+
+```ts
+// ✅ Type guard to narrow unknown
+function isApiError(value: unknown): value is ApiError {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "statusCode" in value &&
+    "message" in value
+  );
+}
+```
+
+---
+
+## 7. Theming and CSS
+
+Two approaches work well in React + Vite projects. Use Tailwind if you want utility-class styling. Use CSS Modules if your design system has a strong existing token vocabulary or your team prefers scoped styles.
+
+### Option A: Tailwind v4
+
+```bash
+pnpm add tailwindcss @tailwindcss/vite
+```
+
+```ts
+// vite.config.ts
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+});
+```
+
+```css
+/* src/index.css */
+@import "tailwindcss";
+
+@theme {
+  /* Brand scale */
+  --color-brand-50: #eef6ff;
+  --color-brand-500: #1d4ed8;
+  --color-brand-600: #1e40af;
+  --color-brand-900: #1e3a8a;
+
+  /* Semantic aliases */
+  --color-primary: var(--color-brand-500);
+  --color-primary-hover: var(--color-brand-600);
+  --color-surface: #ffffff;
+  --color-surface-muted: #f8fafc;
+
+  /* Radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  @theme {
+    --color-surface: #0f172a;
+    --color-surface-muted: #1e293b;
+    --color-primary: var(--color-brand-400);
+  }
+}
+```
+
+Always use semantic token names in components (`bg-primary`, `bg-surface`) instead of raw values (`bg-blue-600`). When the brand changes, you update the token, not every component.
+
+### Option B: CSS Modules
+
+```css
+/* src/styles/tokens.css */
+:root {
+  --color-primary: #1d4ed8;
+  --color-primary-hover: #1e40af;
+  --color-surface: #ffffff;
+  --color-text: #0f172a;
+  --color-text-muted: #64748b;
+
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.1);
+
+  --font-sans: "Inter", system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-surface: #0f172a;
+    --color-text: #f8fafc;
+  }
+}
+```
+
+```css
+/* components/ui/button/Button.module.css */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  transition:
+    color 150ms,
+    background-color 150ms;
+  cursor: pointer;
+}
+
+.primary {
+  background-color: var(--color-primary);
+  color: white;
+}
+.primary:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.sm {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+}
+.md {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+}
+.lg {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+}
+```
+
+---
+
+## 8. Component Patterns
+
+Every shared component lives in its own folder with three files: the component, its types, and an `index.ts` re-export. This keeps the import surface stable regardless of internal file reorganisation.
+
+### The `cn()` utility
+
+Install this before writing any components:
+
+```bash
+pnpm add clsx tailwind-merge
+```
+
+```ts
+// lib/cn.ts
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+```
+
+### Button — the template every component follows
+
+**`Button.types.ts`**
+
+```ts
+import type { ButtonHTMLAttributes } from "react";
+
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+export type ButtonSize = "sm" | "md" | "lg";
+
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  loading?: boolean;
+  fullWidth?: boolean;
+}
+```
+
+**`Button.tsx`**
+
+```tsx
+import { cn } from "@/lib/cn";
+import type { ButtonProps, ButtonVariant, ButtonSize } from "./Button.types";
+
+const variants: Record<ButtonVariant, string> = {
+  primary: "bg-primary text-white hover:bg-primary-hover",
+  secondary:
+    "border border-slate-300 bg-white text-slate-900 hover:bg-slate-50",
+  ghost: "text-slate-700 hover:bg-slate-100",
+  danger: "bg-red-600 text-white hover:bg-red-700",
+};
+
+const sizes: Record<ButtonSize, string> = {
+  sm: "px-3 py-1.5 text-xs",
+  md: "px-4 py-2 text-sm",
+  lg: "px-6 py-3 text-base",
+};
+
+export function Button({
+  variant = "primary",
+  size = "md",
+  loading = false,
+  fullWidth = false,
+  className,
+  children,
+  disabled,
+  ...props
+}: ButtonProps) {
+  return (
+    <button
+      className={cn(
+        "inline-flex items-center justify-center rounded-md font-medium",
+        "transition-colors duration-150",
+        "disabled:pointer-events-none disabled:opacity-50",
+        variants[variant],
+        sizes[size],
+        fullWidth && "w-full",
+        className,
+      )}
+      disabled={disabled || loading}
+      aria-busy={loading}
+      {...props}>
+      {loading ? (
+        <span className="flex items-center gap-2">
+          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8v8H4z"
+            />
+          </svg>
+          Loading...
+        </span>
+      ) : (
+        children
+      )}
+    </button>
+  );
+}
+```
+
+**`index.ts`**
+
+```ts
+export * from "./Button";
+export * from "./Button.types";
+```
+
+### Custom hook pattern
+
+Hooks that are used across features belong in `src/hooks/`. Hooks specific to one feature belong in `src/features/<name>/hooks/`.
+
+```ts
+// hooks/use-local-storage.ts
+import { useState, useEffect } from "react";
+
+export function useLocalStorage<T>(key: string, initialValue: T) {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const item = localStorage.getItem(key);
+      return item ? (JSON.parse(item) as T) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      console.error(`Failed to persist ${key} to localStorage`);
+    }
+  }, [key, value]);
+
+  const remove = () => {
+    localStorage.removeItem(key);
+    setValue(initialValue);
+  };
+
+  return [value, setValue, remove] as const;
+}
+```
+
+---
+
+## 9. TypeScript Config
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+
+    "baseUrl": ".",
+    "paths": { "@/*": ["./src/*"] },
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}
+```
+
+`noUncheckedIndexedAccess` makes `items[0]` return `Item | undefined` instead of `Item`. It prevents the common runtime error of calling a method on an assumed-non-empty array element.
+
+`noImplicitReturns` requires that every code path in a function explicitly returns a value. Catches missing return statements that TypeScript would otherwise silently ignore.
+
+---
+
+## 10. CI/CD Basics
+
+A minimal CI pipeline runs four things on every pull request:
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Format check
+        run: pnpm format
+
+      - name: Build
+        run: pnpm build
+```
+
+These four checks catch the categories of problem that slip through local development: lint rules that pass locally but fail with `--max-warnings 0`, type errors that accumulate gradually, formatting inconsistencies, and build failures from imports that only break in the production bundler.
+
+---
+
+## Setup Checklist
+
+Work through this in order on every new project:
+
+1. Scaffold with `pnpm create vite@latest` (react-ts template)
+2. Set up the folder structure from [Section 1](#1-folder-structure)
+3. Install and configure ESLint from [Section 2](#2-eslint)
+4. Install and configure Prettier from [Section 3](#3-prettier)
+5. Install Husky + lint-staged from [Section 4](#4-husky--lint-staged)
+6. Create `lib/http.ts` and the first service module from [Section 5](#5-api-layer)
+7. Create `types/common.ts` and `types/api.ts` from [Section 6](#6-typescript-types)
+8. Set up Tailwind (or CSS Modules tokens) from [Section 7](#7-theming-and-css)
+9. Install `clsx` + `tailwind-merge`, create `lib/cn.ts`, build the Button component
+10. Update `tsconfig.json` with the strict options from [Section 9](#9-typescript-config)
+11. Add the GitHub Actions workflow from [Section 10](#10-cicd-basics)

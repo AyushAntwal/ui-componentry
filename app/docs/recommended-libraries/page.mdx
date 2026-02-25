@@ -1,0 +1,80 @@
+---
+title: The Libraries We Actually Use
+description: An opinionated guide to the best libraries for Next.js/React and Angular — covering state management, data fetching, forms, and auth.
+date: 2025-01-01
+tags: [nextjs, react, angular, libraries, typescript]
+asIndexPage: true
+sidebarTitle: Recommended Libraries
+---
+
+# The Libraries We Actually Use
+
+Every time you start a new project, you face the same set of questions. Which state manager should I use? Is TanStack Query overkill for this? Should I roll my own auth or use a service?
+
+The JavaScript ecosystem doesn't make it easy. There are often five good options for every problem, and the "best" one depends on context that no npm readme will tell you.
+
+This guide cuts through that. It's opinionated, battle-tested, and covers **four categories** — state management, data fetching, forms, and auth — across **two frameworks**: Next.js/React and Angular. For each category you'll get a clear recommendation, an honest breakdown of the alternatives, and a straight answer on when to use which.
+
+---
+
+## The Short Version
+
+If you just want the TL;DR, here it is.
+
+**For Next.js / React:**
+
+| What you need      | Use this                  |
+| ------------------ | ------------------------- |
+| State management   | **Zustand**               |
+| Data fetching      | **TanStack Query**        |
+| Forms + validation | **React Hook Form + Zod** |
+| Auth               | **Auth.js v5**            |
+
+**For Angular:**
+
+| What you need      | Use this                        |
+| ------------------ | ------------------------------- |
+| State management   | **NgRx Signals**                |
+| Data fetching      | **HttpClient + TanStack Query** |
+| Forms + validation | **Reactive Forms + Zod**        |
+| Auth               | **Auth0 Angular SDK**           |
+
+If any of those picks surprises you, or you want to know why Formik didn't make the list, or when Clerk beats Auth.js — keep reading.
+
+---
+
+## What We Covered and Why
+
+These four categories were chosen because they're the decisions that come up on every project and that are hardest to undo later. Picking the wrong state manager early means a painful refactor at the worst possible time. Same with auth.
+
+**[State Management →](./state-management)**
+Where your app keeps shared data between components. The difference between a great pick and a bad one is usually how much boilerplate you're writing six months in.
+
+**[Data Fetching →](./data-fetching)**
+How your app talks to the server. There's a big gap between "just use fetch" and "have a real caching and mutation strategy" — this page explains when you need each.
+
+**[Forms & Validation →](./forms-validation)**
+Managing form state, validation rules, and error messages without your app grinding to a halt on every keystroke. Performance matters more here than most developers realise.
+
+**[Auth →](./auth)**
+Authentication. Handled correctly or it's a security incident. This is the one category where we're most opinionated: please don't build this yourself.
+
+---
+
+## How We Pick
+
+Every library recommendation here passes these filters before it makes the list:
+
+- **TypeScript-first** — not "has types in DefinitelyTyped," but actually designed with TypeScript in mind
+- **Actively maintained** — a commit in the last three months is the minimum bar
+- **Low boilerplate** — if the getting-started guide requires five files before you write any real logic, that's a red flag
+- **Plays well with the framework** — works with Angular's DI system or React's composition model, not against it
+- **Used in production by real teams** — not just conference demos
+
+---
+
+## A Note on Both Frameworks
+
+Most of these categories have one library that shows up for both React and Angular: **Zod**. It's framework-agnostic and serves as the validation layer for forms on both sides. If your team works across both frameworks, standardising on Zod means your validation logic is portable.
+
+TanStack Query also spans both frameworks with the same API. Your React developers and Angular developers can share knowledge, which matters more than most people admit when it comes to code reviews and onboarding.

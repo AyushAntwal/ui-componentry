@@ -1,0 +1,196 @@
+---
+title: State Management — Stop Overthinking It
+description: A practical guide to picking the right state management library for React and Angular projects. Zustand, NgRx Signals, and when to just use built-in tools.
+date: 2025-01-01
+tags: [state-management, zustand, ngrx, react, angular]
+sidebarTitle: State Management
+---
+
+# State Management — Stop Overthinking It
+
+State management is the topic that generates the most heated debates in frontend development, and also the one that's most often overthought.
+
+Here's the thing most tutorials don't tell you upfront: **most state doesn't need a library**. Before you add Zustand or NgRx to your project, it's worth asking whether the problem you're solving actually requires one.
+
+---
+
+## Know Your State Before Picking a Tool
+
+There are different _kinds_ of state, and the right tool depends on which kind you're dealing with.
+
+| Kind of state        | Example                      | Best tool                           |
+| -------------------- | ---------------------------- | ----------------------------------- |
+| Local UI state       | Modal open, tab index, hover | `useState` or `signal()`            |
+| Shared client state  | Auth user, cart, theme       | State library                       |
+| Server / async state | API responses, pagination    | Data fetching library               |
+| Form state           | Input values, errors         | Forms library                       |
+| URL state            | Search filters, current page | `useSearchParams` or Angular Router |
+
+The most common mistake is using a state library for server data. If you're storing API responses in Zustand or NgRx, there's a better tool for that job — TanStack Query. State libraries are for client-side data that your app _owns_. Server data is borrowed.
+
+---
+
+## React / Next.js
+
+### The Comparison
+
+| Library           | Size    | API              | DevTools | Learning curve | Best for                     |
+| ----------------- | ------- | ---------------- | -------- | -------------- | ---------------------------- |
+| **Zustand** ⭐    | ~1 kb   | Hooks            | ✅       | Low            | Most projects                |
+| **Jotai**         | ~2.5 kb | Atoms            | ✅       | Low–Medium     | Computed/derived state       |
+| **Redux Toolkit** | ~47 kb  | Actions + slices | ✅       | High           | Large teams, strict patterns |
+| **Valtio**        | ~3 kb   | Proxy/mutable    | ✅       | Low            | Mutable-style updates        |
+| **Context API**   | 0 kb    | Built-in React   | ❌       | None           | Rarely-changing state only   |
+
+---
+
+### Zustand — Just Use This
+
+Zustand is what state management in React should have looked like from the start. No providers, no reducers, no action creators, no ceremony. You write a function that returns your state and your setters, and you're done.
+
+A full auth store in Zustand is about ten lines. That same store in Redux would be four files.
+
+**What makes it great:**
+
+- At ~1 kb it's basically free in terms of bundle size
+- No `<Provider>` wrapping your app — components just subscribe directly
+- TypeScript inference works out of the box with no extra configuration
+- Middleware like `persist` and `immer` slot in cleanly when you need them
+- Works perfectly alongside React 19 and Server Components
+
+**What to watch out for:**
+
+- No built-in time-travel debugging (Redux DevTools does this, Zustand's devtools integration doesn't)
+- For very large teams, the lack of enforced structure can become a problem — everyone writes stores a bit differently
+- Async logic is manual — you handle it yourself in your setters
+
+**When to use it:** Almost always. If you're starting a new React project and need shared state, start with Zustand and only reach for something else if you hit a specific limitation.
+
+---
+
+### Jotai — For When State Gets Tangled
+
+Jotai takes a different approach. Instead of one big store, you define small independent _atoms_ and compose them. An atom can derive its value from other atoms, so computed state stays in sync automatically.
+
+**What makes it great:**
+
+- Derived atoms recompute automatically — great for things like cart totals that depend on items and quantities
+- No unnecessary re-renders — components only update when the specific atom they use changes
+- Safe to use in Server Components
+- Tiny bundle
+
+**What to watch out for:**
+
+- The atom mental model takes a bit of adjustment if you're used to stores
+- In large apps, tracing where a piece of state comes from can get harder
+- Smaller middleware ecosystem compared to Zustand
+
+**When to use it:** When you have a lot of interdependent computed values. Shopping carts, filter combinations, form wizards where each step's state depends on previous steps — these are Jotai's sweet spot.
+
+---
+
+### Redux Toolkit — Only If You Have To
+
+Redux Toolkit is what Redux should have been. It eliminates a lot of the original boilerplate. But even with RTK, you're still writing more code for the same outcome you'd get in Zustand.
+
+**What makes it great:**
+
+- Excellent DevTools with time-travel debugging
+- Very structured and predictable — useful when many developers are touching the same store
+- RTK Query handles data fetching if you're already in the Redux world
+- Huge community and ecosystem
+
+**What to watch out for:**
+
+- ~47 kb is a real cost
+- You still need to understand actions, reducers, and selectors
+- Overkill for the vast majority of applications
+- RTK Query is a separate thing to learn on top of the store
+
+**When to use it:** If your team already knows Redux and your app has genuinely complex shared state with lots of contributors who need enforced patterns. Do not start a new project with Redux Toolkit because it seems "more professional."
+
+---
+
+### Context API — The Built-In Option
+
+React's Context API is built-in, which is appealing. But it has a fundamental performance problem: whenever the context value changes, every component that consumes that context re-renders — even if the specific piece of data it cares about didn't change.
+
+**When it's fine:** Theme, locale, logged-in user (if it rarely changes), feature flags. Anything that updates infrequently.
+
+**When to avoid it:** Search input state, shopping cart contents, anything that updates on user interaction. You'll feel it in the UI.
+
+---
+
+## Angular
+
+### The Comparison
+
+| Library                        | API          | Signals    | DevTools | Learning curve | Best for                    |
+| ------------------------------ | ------------ | ---------- | -------- | -------------- | --------------------------- |
+| **NgRx Signals** ⭐            | Signal-based | ✅ Native  | ✅       | Medium         | Angular 17+ apps            |
+| **NgRx Component Store**       | RxJS-based   | ⚠️ Partial | ✅       | Medium         | Teams heavy on RxJS         |
+| **NgRx Store**                 | Redux-style  | ⚠️ Partial | ✅       | High           | Enterprise, strict patterns |
+| **Akita**                      | Entity-based | ❌         | ✅       | Medium         | Entity-heavy data           |
+| **Angular Signals (built-in)** | Signal-based | ✅         | ❌       | Low            | Local + simple shared state |
+
+---
+
+### NgRx Signals — The Modern Angular Answer
+
+NgRx Signals is what you should reach for in new Angular 17+ projects. It's built directly on Angular's new Signals system, which means it's reactive by design without requiring you to think in RxJS for basic state operations.
+
+The API is composable — you build stores by combining feature functions. Entity management, loading states, and computed values are all first-class.
+
+**What makes it great:**
+
+- No actions, no reducers — just state and methods
+- Angular DI works naturally with it
+- Excellent DevTools support through the NgRx DevTools extension
+- `withEntities` handles list/entity state patterns (add, update, remove) without boilerplate
+- Signals-native means it integrates cleanly with Angular's change detection
+
+**What to watch out for:**
+
+- NgRx is still NgRx — there's a learning curve
+- It's relatively new (Angular 17+), so the community is smaller than NgRx Store
+- Less content on StackOverflow compared to the older NgRx patterns
+
+**When to use it:** Default choice for any new Angular app on version 17 or above.
+
+---
+
+### Angular Signals — Good Enough for Simple Cases
+
+Angular 16 introduced built-in Signals as a reactivity primitive. For local component state and simple cross-component sharing via injectable services, you might not need NgRx Signals at all.
+
+**When it's enough:** A single component's local state, sharing a piece of state between two or three related components, simple observable replacements.
+
+**When to add NgRx Signals:** Once you need DevTools visibility, persistence across page refreshes, complex entity management, or a store architecture that scales across a team.
+
+---
+
+### NgRx Store — The Legacy Option
+
+NgRx Store is battle-tested and you'll find it in most large Angular codebases that are more than two years old. It's strict, structured, and has excellent tooling.
+
+But the boilerplate is significant. An action, a reducer, a selector, and an effect for every piece of async state. For new projects, NgRx Signals gets you the same reliability with far less ceremony.
+
+**When to choose it:** Maintaining an existing NgRx Store codebase, or your organisation has standardised on it and changing that standard isn't on the table.
+
+---
+
+## The Short Answer
+
+```
+Starting a new React project?
+→ Zustand. Add Jotai if you have heavy computed state.
+
+Starting a new Angular 17+ project?
+→ NgRx Signals. Use built-in Signals if your state needs are simple.
+
+State that barely changes (theme, locale)?
+→ React Context or an Angular service with a signal(). No library needed.
+
+Already on Redux or NgRx Store?
+→ Keep it. Migration isn't worth the disruption unless you're doing a full rewrite.
+```

@@ -24,13 +24,15 @@ const navbar = (
     // ... Your additional navbar options
   />
 );
-const footer = <Footer>MIT {new Date().getFullYear()} © Ayush.</Footer>;
+const footer = (
+  <Footer className="h-10">{new Date().getFullYear()} © Ayush.</Footer>
+);
 
 export default async function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning>
       <body>
@@ -41,8 +43,7 @@ export default async function RootLayout({
           navbar={navbar}
           pageMap={await getPageMap()}
           docsRepositoryBase="https://github.com/AyushAntwal/ui-componentry/tree/main"
-          footer={footer}
-        >
+          footer={footer}>
           {children}
         </Layout>
       </body>

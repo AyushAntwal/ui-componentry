@@ -1,0 +1,82 @@
+---
+title: Developer Fast Setup Guide
+description: A battle-tested baseline for spinning up React and Next.js projects the right way — linting, formatting, Git hooks, API layers, TypeScript, theming, and more.
+date: 2025-01-01
+tags: [react, nextjs, typescript, setup, developer-experience]
+asIndexPage: true
+---
+
+# Developer Fast Setup Guide
+
+Every new project starts the same way. You scaffold the app, open the editor, and immediately face twenty decisions that have nothing to do with the feature you're actually building.
+
+Where do types live? How do you stop Prettier and ESLint from fighting each other? Should Husky run lint on commit or push? What's the right way to structure the API layer so it doesn't become a tangle of `useEffect`s six months in?
+
+Most teams answer these questions differently every time. The result is that every project has a slightly different shape — different import conventions, different folder layouts, different ways of handling errors. Code review slows down because reviewers don't know where to look. Onboarding takes longer because there's nothing to point a new developer at.
+
+This guide is the answer to that. It's a shared, documented baseline for modern React and Next.js projects. Every decision is explained, not just listed.
+
+---
+
+## What's Covered
+
+This guide is split into two framework-specific pages that you can follow start to finish. Each page covers the same set of concerns, configured correctly for that framework's constraints.
+
+**[React (Vite) →](./react-setup)**
+Plain React with Vite. No server-side rendering, no router opinion baked in. Clean slate for SPAs, dashboards, component libraries, and Electron apps.
+
+**[Next.js (App Router) →](./nextjs-setup)**
+Next.js with the App Router. Server Components, Server Actions, file-based routing, and the edge runtime all factor into how things are configured.
+
+Each page covers:
+
+- **Folder structure** — where things go and why
+- **ESLint** — rules that catch real bugs, not just style preferences
+- **Prettier** — formatting that nobody has to think about
+- **Husky + lint-staged** — enforcing quality at commit time, not review time
+- **API layer** — how to talk to your backend without spaghetti
+- **TypeScript types** — a strategy for types that scales without duplication
+- **Theming and CSS** — design tokens, Tailwind, and when to use CSS Modules
+- **Component patterns** — reusable components that are actually reusable
+
+---
+
+## Why a Baseline Matters
+
+Two things tend to happen without one.
+
+The first is inconsistency. Developer A puts shared types in `src/types/`. Developer B puts them next to the component that uses them. Developer C puts them in `src/interfaces/`. All three are defensible. None of them is consistent. Searching the codebase for a type definition becomes a guessing game.
+
+The second is compounding debt. Small decisions that aren't documented get made again every time a new project starts. The same ESLint config gets written from scratch, slightly differently, four times. The same mistake in the API layer gets made on the third project because nobody wrote down how it went wrong on the first two.
+
+A baseline doesn't solve all of this. But it gives the team a starting point they can argue about deliberately rather than stumble into accidentally.
+
+---
+
+## The Principles Behind Every Decision
+
+These are the filters every recommendation in this guide passed:
+
+**TypeScript-first.** Not "has type definitions available" — actually designed around TypeScript, with types inferred rather than manually written wherever possible.
+
+**Catches bugs, not just style.** Every ESLint rule and TypeScript flag earns its place by preventing a class of real mistake, not just enforcing a cosmetic preference.
+
+**Automation over discipline.** If something needs to be done consistently, automate it. Husky runs linting so developers don't have to remember to. Prettier formats so no one debates tabs vs spaces in review.
+
+**Explain the why.** Configuration without explanation becomes cargo-culting. Every non-obvious setting in this guide has a sentence explaining what problem it solves.
+
+**Easy to deviate from.** This is a baseline, not a mandate. The best thing about a documented starting point is that changes to it are deliberate rather than accidental.
+
+---
+
+## The Stack at a Glance
+
+| Tool            | React (Vite)              | Next.js (App Router)            |
+| --------------- | ------------------------- | ------------------------------- |
+| Language        | TypeScript                | TypeScript                      |
+| Styling         | Tailwind v4 / CSS Modules | Tailwind v4                     |
+| Linting         | ESLint (flat config)      | ESLint (flat config)            |
+| Formatting      | Prettier                  | Prettier                        |
+| Git hooks       | Husky + lint-staged       | Husky + lint-staged             |
+| Package manager | pnpm                      | pnpm                            |
+| Build           | Vite                      | Turbopack (dev), Next.js (prod) |
