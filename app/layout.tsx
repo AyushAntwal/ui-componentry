@@ -24,10 +24,6 @@ const navbar = (
     // ... Your additional navbar options
   />
 );
-const footer = (
-  <Footer className="h-10">{new Date().getFullYear()} © Ayush.</Footer>
-);
-
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -42,8 +38,7 @@ export default async function RootLayout({
           copyPageButton={false}
           navbar={navbar}
           pageMap={await getPageMap()}
-          docsRepositoryBase="https://github.com/AyushAntwal/ui-componentry/tree/main"
-          footer={footer}>
+          docsRepositoryBase="https://github.com/AyushAntwal/ui-componentry/tree/main">
           {children}
         </Layout>
       </body>
